@@ -128,6 +128,15 @@ function WebShell({ children, colorScheme }: { children: ReactNode; colorScheme:
   return (
     <ThemedView style={styles.webRoot}>
       <View style={[styles.webBody, isCompact ? styles.webBodyCompact : null]}>
+        <View style={[styles.webNotice, isCompact ? styles.webNoticeCompact : null]}>
+          <View style={[styles.webNoticeCard, { borderColor: theme.border, backgroundColor: theme.surface }]}>
+            <ThemedText type="subtitle">Web Preview Notice</ThemedText>
+            <ThemedText style={[styles.webNoticeText, { color: theme.mutedText }]}>
+              This web simulation may differ from the actual mobile experience. You can download the app for a better
+              experience. APK download link will be added soon.
+            </ThemedText>
+          </View>
+        </View>
         <View style={styles.phoneCenter}>
           <View style={styles.phoneWrap}>
             {canGoBack ? (
@@ -209,6 +218,27 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     paddingHorizontal: 20,
     paddingVertical: 18,
+  },
+  webNotice: {
+    width: 260,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+  },
+  webNoticeCompact: {
+    width: '100%',
+    alignItems: 'center',
+  },
+  webNoticeCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 16,
+    width: '100%',
+  },
+  webNoticeText: {
+    marginTop: 8,
+    fontSize: 13,
+    fontFamily: FontFamilies.medium,
+    lineHeight: 18,
   },
   phoneCenter: {
     alignItems: 'center',
