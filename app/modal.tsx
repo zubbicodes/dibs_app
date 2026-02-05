@@ -1,6 +1,6 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import LottieView from 'lottie-react-native';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,6 +9,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Colors, FontFamilies } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useDemoSession } from '@/hooks/demo-session';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 type VerificationState = 'scanning' | 'success' | 'failure';
@@ -16,6 +17,7 @@ type VerificationState = 'scanning' | 'success' | 'failure';
 export default function IdentityVerificationModal() {
   const router = useRouter();
   const { mediaId } = useLocalSearchParams<{ mediaId?: string }>();
+  const { verifyVault, resetVaultVerification } = useDemoSession();
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
   const enableLayoutAnimations = process.env.EXPO_OS !== 'web';
@@ -23,12 +25,6 @@ export default function IdentityVerificationModal() {
   const [state, setState] = useState<VerificationState>('scanning');
 
   const targetLabel = useMemo(() => (mediaId ? `Media ID: ${mediaId}` : 'Media ID: —'), [mediaId]);
-
-  useEffect(() => {
-    setState('scanning');
-    const timer = setTimeout(() => setState('success'), 1400);
-    return () => clearTimeout(timer);
-  }, [mediaId]);
 
   const isScanning = state === 'scanning';
   const isSuccess = state === 'success';
@@ -88,7 +84,11 @@ export default function IdentityVerificationModal() {
 
           <View style={styles.actions}>
             <Pressable
-              onPress={() => setState('success')}
+              onPress={() => {
+                setState('success');
+                verifyVault();
+                setTimeout(() => router.back(), 250);
+              }}
               style={({ pressed }) => [
                 styles.primaryButton,
                 {
@@ -102,7 +102,10 @@ export default function IdentityVerificationModal() {
             </Pressable>
 
             <Pressable
-              onPress={() => setState('failure')}
+              onPress={() => {
+                setState('failure');
+                resetVaultVerification();
+              }}
               style={({ pressed }) => [
                 styles.outlineButton,
                 {
