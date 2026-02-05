@@ -1,50 +1,158 @@
-# Welcome to your Expo app 👋
+# DIBS -- Digital Image Biometric Systems (MVP)
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+## Overview
 
-## Get started
+DIBS is a biometric-based secure media protection application designed
+to prevent unauthorized viewing, misuse, manipulation, deepfake
+generation, blackmail, or sharing of sensitive images and videos.
 
-1. Install dependencies
+Core principle:
 
-   ```bash
-   npm install
-   ```
+**Media is only visible after successful facial biometric verification
+with liveness detection.**
 
-2. Start the app
+The first release targets **Android (Google Play MVP)**.
 
-   ```bash
-   npx expo start
-   ```
+------------------------------------------------------------------------
 
-In the output, you'll find options to open the app in a
+## MVP Goals
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+-   Validate biometric media locking
+-   Prevent unauthorized access and sharing
+-   Enable traceability and accountability
+-   Deliver a Play Store-ready secure MVP
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+------------------------------------------------------------------------
 
-## Get a fresh project
+## Key Features (Phase One)
 
-When you're ready, run:
+### 1. User Authentication & Identity
 
-```bash
-npm run reset-project
+-   Secure registration and login
+-   Firebase Authentication backend
+-   Biometric enrollment (Face ID)
+-   Identity binding: content linked to verified user
+
+### 2. Biometric Media Access Control (Core)
+
+-   Face recognition + liveness detection
+-   Media visible only after verification
+-   Content locked to authorized user + device
+
+### 3. Secure Image & Video Viewer
+
+-   In-app protected viewing only
+-   No downloads, exports, or sharing
+-   Screenshot + screen recording prevention
+
+### 4. Controlled Content Distribution
+
+-   Media delivered only from authorized sources
+-   Recipient biometric-bound protection enforced
+
+### 5. User Traceability & Audit Logs
+
+Audit trail captures: - User identity - Access timestamps -
+Device/session reference - Verified vs Blocked attempts
+
+### 6. Partial Offline Functionality
+
+-   Limited offline access for previously verified content
+-   Re-verification required after defined conditions
+-   Secure cloud sync once online
+
+### 7. Compliance-Ready Architecture
+
+-   GDPR-conscious setup
+-   Secure encrypted storage practices
+-   Foundation ready for future regulatory extensions
+
+------------------------------------------------------------------------
+
+## System Architecture (MVP)
+
+-   Android App (Jetpack Compose UI)
+-   Firebase Authentication
+-   Firestore Database (users, mediaVault, accessLogs)
+-   Firebase Storage (encrypted media files)
+-   Optional Cloud Functions for enforcement logic
+
+------------------------------------------------------------------------
+
+## Firestore Database Structure
+
+### users/{userId}
+
+``` json
+{
+  "fullName": "",
+  "email": "",
+  "faceEnrollmentStatus": true,
+  "deviceId": "",
+  "createdAt": "timestamp"
+}
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+### mediaVault/{mediaId}
 
-## Learn more
+``` json
+{
+  "assignedToUserId": "",
+  "type": "image|video",
+  "fileUrl": "",
+  "encrypted": true,
+  "locked": true,
+  "createdAt": "timestamp"
+}
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+### accessLogs/{logId}
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+``` json
+{
+  "userId": "",
+  "mediaId": "",
+  "eventType": "VERIFIED|BLOCKED",
+  "deviceId": "",
+  "timestamp": "timestamp"
+}
+```
 
-## Join the community
+------------------------------------------------------------------------
 
-Join our community of developers creating universal apps.
+## Delivery Timeline (6--8 Weeks)
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+  Week   Phase
+  ------ -------------------------------------
+  1--2   Setup + Auth + Enrollment
+  3--4   Core Media Lock + Viewer
+  5--6   Logs + Offline Mode
+  7--8   Compliance + Testing + Play Release
+
+------------------------------------------------------------------------
+
+## Final MVP Deliverables
+
+-   Android App (Play Store Ready)
+-   Biometric + Liveness Protected Viewer
+-   Secure Media Vault
+-   Audit Logging System
+-   Partial Offline Support
+-   GDPR-Ready Foundation
+-   Full Documentation + Handover
+
+------------------------------------------------------------------------
+
+## Future Enhancements (Post-MVP)
+
+-   Multi-user secure sharing
+-   Admin portal for content assignment
+-   Evidence-grade forensic watermarking
+-   AI deepfake detection
+-   iOS release
+
+------------------------------------------------------------------------
+
+## License
+
+Private MVP build for client delivery.

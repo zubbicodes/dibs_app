@@ -5,27 +5,53 @@
 
 import { Platform } from 'react-native';
 
-const tintColorLight = '#0a7ea4';
-const tintColorDark = '#fff';
+const primaryLight = '#0A2E65';
+const accentLight = '#00C2D1';
+const primaryDark = '#6AA8FF';
+const accentDark = '#22C6D9';
 
 export const Colors = {
   light: {
-    text: '#11181C',
-    background: '#fff',
-    tint: tintColorLight,
-    icon: '#687076',
-    tabIconDefault: '#687076',
-    tabIconSelected: tintColorLight,
+    text: '#0F1A2B',
+    mutedText: '#5E6B82',
+    background: '#F7F8FB',
+    surface: '#F1F4F9',
+    surface2: '#FFFFFF',
+    border: '#E2E7F0',
+    primary: primaryLight,
+    accent: accentLight,
+    success: '#27AE60',
+    danger: '#EB5757',
+    tint: accentLight,
+    icon: '#64708A',
+    tabIconDefault: '#7C889E',
+    tabIconSelected: primaryLight,
   },
   dark: {
-    text: '#ECEDEE',
-    background: '#151718',
-    tint: tintColorDark,
-    icon: '#9BA1A6',
-    tabIconDefault: '#9BA1A6',
-    tabIconSelected: tintColorDark,
+    text: '#EAF1FF',
+    mutedText: '#9FB0CC',
+    background: '#070A12',
+    surface: '#0E1423',
+    surface2: '#0A1020',
+    border: '#1D2A44',
+    primary: primaryDark,
+    accent: accentDark,
+    success: '#27AE60',
+    danger: '#EB5757',
+    tint: accentDark,
+    icon: '#9FB0CC',
+    tabIconDefault: '#9FB0CC',
+    tabIconSelected: accentDark,
   },
 };
+
+export const FontFamilies = {
+  regular: 'Poppins_400Regular',
+  medium: 'Poppins_500Medium',
+  semiBold: 'Poppins_600SemiBold',
+  bold: 'Poppins_700Bold',
+  extraBold: 'Poppins_800ExtraBold',
+} as const;
 
 export const Fonts = Platform.select({
   ios: {
