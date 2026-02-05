@@ -5,7 +5,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import type { ReactNode } from 'react';
 import { useEffect } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Linking, Platform, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import 'react-native-reanimated';
 
 import { ThemedText } from '@/components/themed-text';
@@ -124,6 +124,7 @@ function WebShell({ children, colorScheme }: { children: ReactNode; colorScheme:
   const theme = Colors[colorScheme];
   const isCompact = width < 980;
   const canGoBack = typeof router.canGoBack === 'function' ? router.canGoBack() : true;
+  const apkUrl = 'https://drive.google.com/file/d/15-4jvSWeHcLyUGvXSZz66XEDvj_Gekxf/view?usp=sharing';
 
   return (
     <ThemedView style={styles.webRoot}>
@@ -133,8 +134,20 @@ function WebShell({ children, colorScheme }: { children: ReactNode; colorScheme:
             <ThemedText type="subtitle">Web Preview Notice</ThemedText>
             <ThemedText style={[styles.webNoticeText, { color: theme.mutedText }]}>
               This web simulation may differ from the actual mobile experience. You can download the app for a better
-              experience. APK download link will be added soon.
+              experience.
             </ThemedText>
+            <Pressable
+              onPress={() => Linking.openURL(apkUrl)}
+              style={({ pressed }) => [
+                styles.webNoticeButton,
+                {
+                  borderColor: theme.primary,
+                  backgroundColor: theme.primary,
+                  opacity: pressed ? 0.86 : 1,
+                },
+              ]}>
+              <ThemedText style={{ color: '#FFFFFF', fontFamily: FontFamilies.semiBold }}>Download APK</ThemedText>
+            </Pressable>
           </View>
         </View>
         <View style={styles.phoneCenter}>
@@ -239,6 +252,14 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: FontFamilies.medium,
     lineHeight: 18,
+  },
+  webNoticeButton: {
+    marginTop: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   phoneCenter: {
     alignItems: 'center',
