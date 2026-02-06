@@ -1,14 +1,12 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, usePathname, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import type { ReactNode } from 'react';
 import { useEffect } from 'react';
-import { Linking, Platform, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import 'react-native-reanimated';
-
-import { DibsLogo } from '@/components/dibs-logo';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Colors, FontFamilies } from '@/constants/theme';
@@ -121,42 +119,18 @@ function RootNavigator() {
 
 function WebShell({ children, colorScheme }: { children: ReactNode; colorScheme: 'light' | 'dark' }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { width } = useWindowDimensions();
   const theme = Colors[colorScheme];
   const isCompact = width < 980;
-  const canGoBack = typeof router.canGoBack === 'function' ? router.canGoBack() : true;
-  const apkUrl = 'https://drive.google.com/file/d/15-4jvSWeHcLyUGvXSZz66XEDvj_Gekxf/view?usp=sharing';
+  const showBackButton = pathname !== '/splash' && pathname !== '/';
 
   return (
     <ThemedView style={styles.webRoot}>
       <View style={[styles.webBody, isCompact ? styles.webBodyCompact : null]}>
-        <View style={[styles.webNotice, isCompact ? styles.webNoticeCompact : null]}>
-          <View style={[styles.webNoticeCard, { borderColor: theme.border, backgroundColor: theme.surface }]}>
-            <View style={styles.webLogoWrap}>
-              <DibsLogo width={100} height={38} />
-            </View>
-            <ThemedText type="subtitle">Web Preview Notice</ThemedText>
-            <ThemedText style={[styles.webNoticeText, { color: theme.mutedText }]}>
-              This web simulation may differ from the actual mobile experience. You can download the app for a better
-              experience.
-            </ThemedText>
-            <Pressable
-              onPress={() => Linking.openURL(apkUrl)}
-              style={({ pressed }) => [
-                styles.webNoticeButton,
-                {
-                  borderColor: theme.primary,
-                  backgroundColor: theme.primary,
-                  opacity: pressed ? 0.86 : 1,
-                },
-              ]}>
-              <ThemedText style={{ color: '#FFFFFF', fontFamily: FontFamilies.semiBold }}>Download APK</ThemedText>
-            </Pressable>
-          </View>
-        </View>
         <View style={styles.phoneCenter}>
           <View style={styles.phoneWrap}>
-            {canGoBack ? (
+            {showBackButton ? (
               <Pressable
                 onPress={() => router.back()}
                 style={({ pressed }) => [
@@ -221,6 +195,7 @@ function WebShell({ children, colorScheme }: { children: ReactNode; colorScheme:
 const styles = StyleSheet.create({
   webRoot: {
     flex: 1,
+    overflow: 'visible',
   },
   webBody: {
     flex: 1,
@@ -230,44 +205,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
     paddingVertical: 24,
     gap: 28,
+    overflow: 'visible',
   },
   webBodyCompact: {
     flexDirection: 'column',
     paddingHorizontal: 20,
     paddingVertical: 18,
-  },
-  webNotice: {
-    width: 260,
-    alignItems: 'flex-start',
-    justifyContent: 'center',
-  },
-  webNoticeCompact: {
-    width: '100%',
-    alignItems: 'center',
-  },
-  webNoticeCard: {
-    borderRadius: 18,
-    borderWidth: 1,
-    padding: 16,
-    width: '100%',
-  },
-  webLogoWrap: {
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  webNoticeText: {
-    marginTop: 8,
-    fontSize: 13,
-    fontFamily: FontFamilies.medium,
-    lineHeight: 18,
-  },
-  webNoticeButton: {
-    marginTop: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingVertical: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   phoneCenter: {
     alignItems: 'center',
@@ -275,11 +218,13 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     minWidth: 0,
     minHeight: 0,
+    overflow: 'visible',
   },
   phoneWrap: {
     width: 380,
     height: 780,
     position: 'relative',
+    overflow: 'visible',
   },
   phoneFrame: {
     width: 380,
@@ -305,7 +250,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 3,
+    zIndex: 10,
+    elevation: 10,
   },
   phoneScreen: {
     flex: 1,
