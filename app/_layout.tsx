@@ -8,6 +8,7 @@ import { useEffect } from 'react';
 import { Linking, Platform, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import 'react-native-reanimated';
 
+import { DibsLogo } from '@/components/dibs-logo';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Colors, FontFamilies } from '@/constants/theme';
@@ -131,6 +132,9 @@ function WebShell({ children, colorScheme }: { children: ReactNode; colorScheme:
       <View style={[styles.webBody, isCompact ? styles.webBodyCompact : null]}>
         <View style={[styles.webNotice, isCompact ? styles.webNoticeCompact : null]}>
           <View style={[styles.webNoticeCard, { borderColor: theme.border, backgroundColor: theme.surface }]}>
+            <View style={styles.webLogoWrap}>
+              <DibsLogo width={100} height={38} />
+            </View>
             <ThemedText type="subtitle">Web Preview Notice</ThemedText>
             <ThemedText style={[styles.webNoticeText, { color: theme.mutedText }]}>
               This web simulation may differ from the actual mobile experience. You can download the app for a better
@@ -246,6 +250,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 16,
     width: '100%',
+  },
+  webLogoWrap: {
+    alignItems: 'center',
+    marginBottom: 12,
   },
   webNoticeText: {
     marginTop: 8,

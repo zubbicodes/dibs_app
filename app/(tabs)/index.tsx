@@ -4,6 +4,7 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { DibsLogo } from '@/components/dibs-logo';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Pill } from '@/components/ui/pill';
@@ -69,13 +70,8 @@ export default function HomeScreen() {
             {...(enableLayoutAnimations ? { entering: FadeInDown.duration(240) } : {})}>
             <SurfaceCard variant="glass" style={styles.heroCard}>
               <View style={styles.heroTopRow}>
-                <View style={[styles.headerIconWrap, { backgroundColor: theme.surface }]}>
-                  <MaterialIcons name="verified-user" size={18} color={theme.primary} />
-                </View>
+                <DibsLogo width={90} height={34} />
                 <View style={styles.headerText}>
-                  <ThemedText type="title" style={styles.headerTitle}>
-                    DIBS
-                  </ThemedText>
                   <ThemedText style={{ color: theme.mutedText, fontFamily: FontFamilies.medium }}>
                     Protection Active
                   </ThemedText>
@@ -223,18 +219,8 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 12,
   },
-  headerIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   headerText: {
     flex: 1,
-  },
-  headerTitle: {
-    marginBottom: 2,
   },
   heroCard: {
     padding: 12,

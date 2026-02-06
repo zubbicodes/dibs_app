@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { DibsLogo } from '@/components/dibs-logo';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Colors, FontFamilies } from '@/constants/theme';
@@ -32,6 +33,9 @@ export default function SignupScreen() {
         <Animated.View
           style={styles.header}
           {...(enableLayoutAnimations ? { entering: FadeInDown.duration(260) } : {})}>
+          <View style={styles.logoContainer}>
+            <DibsLogo width={140} height={52} />
+          </View>
           <ThemedText type="title" style={styles.headerTitle}>
             Create account
           </ThemedText>
@@ -136,6 +140,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     marginBottom: 20,
+  },
+  logoContainer: {
+    alignItems: 'center',
+    marginBottom: 8,
   },
   headerTitle: {
     fontSize: 28,
