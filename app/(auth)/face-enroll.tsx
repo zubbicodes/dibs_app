@@ -96,7 +96,7 @@ function NativeEnrollScreen({
   const device = useCameraDevice('front');
   const cameraRef = useRef<Camera>(null);
 
-  const { model, state: modelState, error: modelError } = useFaceModel();
+  const { model, state: modelState, error: modelError, downloadModel, progress } = useFaceModel();
 
   const { detectFaces } = useFaceDetector({
     performanceMode: 'fast',
@@ -272,15 +272,17 @@ function NativeEnrollScreen({
   const instructionSub =
     phase === 'error'
       ? errorMsg ?? 'Something went wrong.'
-      : modelState !== 'loaded'
-        ? modelState === 'error'
-          ? `Model failed to load${
-              modelError && typeof modelError === 'object' && 'message' in modelError
-                ? `: ${(modelError as { message?: string }).message}`
-                : ''
-            }`
-          : 'Loading face model…'
-        : 'Ensure your face is centered, well-lit and\nunobstructed by glasses or masks.';
+      : modelState === 'downloading'
+        ? `Downloading model… ${progress ? Math.round(progress * 100) : 0}%`
+        : modelState !== 'loaded'
+          ? modelState === 'error'
+            ? `Model failed to load${
+                modelError && typeof modelError === 'object' && 'message' in modelError
+                  ? `: ${(modelError as { message?: string }).message}`
+                  : ''
+              }`
+            : 'Loading face model…'
+          : 'Ensure your face is centered, well-lit and\nunobstructed by glasses or masks.';
 
   const canEnroll =
     hasPermission &&
@@ -378,27 +380,39 @@ function NativeEnrollScreen({
               {instructionSub}
             </ThemedText>
 
-            <Pressable
-              onPress={runEnrollment}
-              disabled={!canEnroll}
-              style={({ pressed }) => [
-                styles.enrollButton,
-                {
-                  backgroundColor: canEnroll ? theme.primary : 'rgba(128,128,128,0.4)',
-                  opacity: pressed ? 0.92 : 1,
-                },
-              ]}>
-              {phase === 'capturing' || phase === 'saving' ? (
-                <ActivityIndicator color="#FFF" />
-              ) : (
-                <>
-                  <ThemedText style={styles.enrollButtonText}>
-                    {modelState !== 'loaded' ? 'Loading model…' : 'Enroll Face ID'}
-                  </ThemedText>
-                  <MaterialIcons name="face" size={18} color="#FFF" />
-                </>
-              )}
-            </Pressable>
+            {modelState === 'error' ? (
+              <Pressable
+                onPress={downloadModel}
+                style={({ pressed }) => [
+                  styles.enrollButton,
+                  { backgroundColor: theme.primary, opacity: pressed ? 0.92 : 1 },
+                ]}>
+                <ThemedText style={styles.enrollButtonText}>Download Model</ThemedText>
+                <MaterialIcons name="download" size={18} color="#FFF" />
+              </Pressable>
+            ) : (
+              <Pressable
+                onPress={runEnrollment}
+                disabled={!canEnroll}
+                style={({ pressed }) => [
+                  styles.enrollButton,
+                  {
+                    backgroundColor: canEnroll ? theme.primary : 'rgba(128,128,128,0.4)',
+                    opacity: pressed ? 0.92 : 1,
+                  },
+                ]}>
+                {phase === 'capturing' || phase === 'saving' ? (
+                  <ActivityIndicator color="#FFF" />
+                ) : (
+                  <>
+                    <ThemedText style={styles.enrollButtonText}>
+                      {modelState === 'downloading' ? `Downloading… ${progress ? Math.round(progress * 100) : 0}%` : modelState !== 'loaded' ? 'Loading model…' : 'Enroll Face ID'}
+                    </ThemedText>
+                    <MaterialIcons name="face" size={18} color="#FFF" />
+                  </>
+                )}
+              </Pressable>
+            )}
 
             <Pressable
               onPress={handleSkip}

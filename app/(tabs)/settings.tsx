@@ -3,7 +3,16 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  View,
+} from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -13,6 +22,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { useColorScheme, useSetColorScheme } from '@/hooks/use-color-scheme';
 import { useViewportDimensions } from '@/hooks/use-viewport-dimensions';
 import { ResponsiveWrapper } from '@/components/responsive-wrapper';
+import { deleteEnrollment } from '@/lib/face-recognition';
 import { supabase } from '@/lib/supabase';
 
 const SettingsScreen = () => {
@@ -27,6 +37,39 @@ const SettingsScreen = () => {
   const [darkMode, setDarkMode] = useState(colorScheme === 'dark');
   const [offlineAccess, setOfflineAccess] = useState(true);
   const [requireFaceScan, setRequireFaceScan] = useState(true);
+  const [resetModalVisible, setResetModalVisible] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
+
+  const handleEnrollFace = () => {
+    router.push('/(auth)/face-enroll');
+  };
+
+  const handleConfirmReset = async () => {
+    if (!user?.id || resetting) return;
+    setResetting(true);
+    setResetError(null);
+    try {
+      await deleteEnrollment(user.id);
+      await supabase.from('logs').insert({
+        user_id: user.id,
+        name:
+          user.user_metadata?.full_name ||
+          user.email?.split('@')[0] ||
+          'User',
+        details: 'Face ID reset by user',
+        device: Platform.OS,
+        status: 'verified',
+        type: 'success',
+      });
+      setResetModalVisible(false);
+      router.push('/(auth)/face-enroll');
+    } catch (err: any) {
+      setResetError(err?.message ?? 'Failed to reset Face ID. Try again.');
+    } finally {
+      setResetting(false);
+    }
+  };
 
   const handleDarkMode = (value: boolean) => {
     setDarkMode(value);
@@ -76,11 +119,38 @@ const SettingsScreen = () => {
                   <MaterialIcons name="chevron-right" size={24} color={theme.mutedText} style={{ opacity: 0.6 }} />
                 </Pressable>
                 <View style={[styles.divider, { backgroundColor: dividerColor }]} />
-                <Pressable style={({ pressed }) => [styles.row, { opacity: pressed ? 0.9 : 1 }]}>
-                  <View style={[styles.iconCircle, { backgroundColor: colorScheme === 'dark' ? 'rgba(119, 126, 137, 0.3)' : 'rgba(99, 106, 117, 0.25)' }]}>
-                    <MaterialIcons name="lock" size={14} color={theme.mutedText} />
-                  </View>
-                  <ThemedText style={[styles.rowLabel, { color: theme.text, fontSize: isMobile ? 12 : 15 }]}>Reset Face ID</ThemedText>
+                <Pressable
+                  onPress={handleEnrollFace}
+                  style={({ pressed }) => [styles.row, { opacity: pressed ? 0.9 : 1 }]}>
+                  <LinearGradient
+                    colors={theme.blueGradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.iconCircle}>
+                    <MaterialIcons name="face" size={14} color="#FFF" />
+                  </LinearGradient>
+                  <ThemedText style={[styles.rowLabel, { color: theme.text, fontSize: isMobile ? 12 : 15 }]}>
+                    Enroll Face ID
+                  </ThemedText>
+                  <MaterialIcons name="chevron-right" size={20} color={theme.mutedText} style={{ opacity: 0.6 }} />
+                </Pressable>
+                <View style={[styles.divider, { backgroundColor: dividerColor }]} />
+                <Pressable
+                  onPress={() => {
+                    setResetError(null);
+                    setResetModalVisible(true);
+                  }}
+                  style={({ pressed }) => [styles.row, { opacity: pressed ? 0.9 : 1 }]}>
+                  <LinearGradient
+                    colors={theme.dangerGradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.iconCircle}>
+                    <MaterialIcons name="restart-alt" size={14} color="#FFF" />
+                  </LinearGradient>
+                  <ThemedText style={[styles.rowLabel, { color: theme.text, fontSize: isMobile ? 12 : 15 }]}>
+                    Reset Face ID
+                  </ThemedText>
                   <MaterialIcons name="chevron-right" size={20} color={theme.mutedText} style={{ opacity: 0.6 }} />
                 </Pressable>
               </View>
@@ -190,6 +260,65 @@ const SettingsScreen = () => {
           </ScrollView>
         </ResponsiveWrapper>
       </SafeAreaView>
+
+      <Modal
+        visible={resetModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !resetting && setResetModalVisible(false)}>
+        <View style={styles.modalBackdrop}>
+          <View
+            style={[
+              styles.modalCard,
+              { backgroundColor: theme.background, borderColor: theme.border },
+            ]}>
+            <View style={[styles.modalIconWrap, { backgroundColor: 'rgba(239, 68, 68, 0.12)' }]}>
+              <MaterialIcons name="warning-amber" size={30} color="#EF4444" />
+            </View>
+            <ThemedText style={[styles.modalTitle, { color: theme.text }]}>
+              Reset Face ID?
+            </ThemedText>
+            <ThemedText style={[styles.modalBody, { color: theme.mutedText }]}>
+              Your enrolled face data will be permanently deleted. You&apos;ll need to enroll
+              again to unlock the vault with Face ID.
+            </ThemedText>
+
+            {resetError ? (
+              <ThemedText style={styles.modalError}>{resetError}</ThemedText>
+            ) : null}
+
+            <View style={styles.modalButtonRow}>
+              <Pressable
+                disabled={resetting}
+                onPress={() => setResetModalVisible(false)}
+                style={({ pressed }) => [
+                  styles.modalButton,
+                  styles.modalButtonSecondary,
+                  { borderColor: theme.border, opacity: pressed ? 0.85 : 1 },
+                ]}>
+                <ThemedText style={[styles.modalButtonText, { color: theme.text }]}>
+                  Cancel
+                </ThemedText>
+              </Pressable>
+              <Pressable
+                disabled={resetting}
+                onPress={handleConfirmReset}
+                style={({ pressed }) => [
+                  styles.modalButton,
+                  { backgroundColor: '#EF4444', opacity: pressed ? 0.9 : 1 },
+                ]}>
+                {resetting ? (
+                  <ActivityIndicator color="#FFF" />
+                ) : (
+                  <ThemedText style={[styles.modalButtonText, { color: '#FFF' }]}>
+                    Reset
+                  </ThemedText>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ThemedView>
   );
 };
@@ -304,6 +433,70 @@ const styles = StyleSheet.create({
   logoutText: {
     color: '#FFFFFF',
     fontSize: 15,
+    fontFamily: FontFamilies.semiBold,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 28,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 420,
+    borderRadius: 22,
+    borderWidth: 1,
+    padding: 24,
+    alignItems: 'center',
+  },
+  modalIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontFamily: FontFamilies.semiBold,
+    lineHeight: 28,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  modalBody: {
+    fontSize: 14,
+    lineHeight: 22,
+    textAlign: 'center',
+    marginBottom: 18,
+    fontFamily: FontFamilies.regular,
+  },
+  modalError: {
+    color: '#EF4444',
+    fontSize: 13,
+    textAlign: 'center',
+    marginBottom: 12,
+    fontFamily: FontFamilies.medium,
+  },
+  modalButtonRow: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  modalButton: {
+    flex: 1,
+    height: 46,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalButtonSecondary: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+  },
+  modalButtonText: {
+    fontSize: 14,
     fontFamily: FontFamilies.semiBold,
   },
 });

@@ -9,7 +9,13 @@
       "Bash(~/Android/Sdk/platform-tools/adb devices *)",
       "Bash(unzip -l app-release.apk)",
       "Bash(awk -F'/' '{print $2}')",
-      "Bash(unzip -l /home/zubbihawk/Code/dibs_app-1/android/app/build/outputs/apk/release/app-release.apk)"
+      "Bash(unzip -l /home/zubbihawk/Code/dibs_app-1/android/app/build/outputs/apk/release/app-release.apk)",
+      "Bash(git -C /home/zubbihawk/Code/dibs_app-1 log --oneline -20)",
+      "Bash(git -C /home/zubbihawk/Code/dibs_app-1 diff HEAD hooks/use-face-model.tsx)",
+      "Bash(java -version)",
+      "Read(//opt/**)",
+      "Bash(apt list *)",
+      "Read(//snap/**)"
     ]
   }
 }
