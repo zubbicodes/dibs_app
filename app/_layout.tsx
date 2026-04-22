@@ -13,7 +13,7 @@ import { ThemedView } from '@/components/themed-view';
 import { Colors, FontFamilies } from '@/constants/theme';
 import { MOBILE_VIEWPORT, WebViewportContext, useViewportDimensions } from '@/hooks/use-viewport-dimensions';
 import { ThemeModeProvider, useColorScheme } from '@/hooks/use-color-scheme';
-import { AuthProvider } from '@/hooks/use-auth';
+import { AuthProvider, useAuth } from '@/hooks/use-auth';
 import { DemoSessionProvider } from '@/hooks/demo-session';
 import { FaceModelProvider } from '@/hooks/use-face-model';
 import {
@@ -27,6 +27,7 @@ import {
 
 export const unstable_settings = {
   anchor: 'splash',
+  initialRouteName: 'splash',
 };
 
 void SplashScreen.preventAutoHideAsync();
@@ -52,12 +53,6 @@ export default function RootLayout() {
     Poppins_800ExtraBold,
   });
 
-  useEffect(() => {
-    if (fontsLoaded) {
-      void SplashScreen.hideAsync();
-    }
-  }, [fontsLoaded]);
-
   if (!fontsLoaded) {
     return null;
   }
@@ -80,6 +75,20 @@ export default function RootLayout() {
 function RootNavigator() {
   const colorScheme = useColorScheme() ?? 'light';
   const isWeb = Platform.OS === 'web';
+  const { isLoading: isAuthLoading } = useAuth();
+
+  // Keep the native splash visible until auth has resolved — prevents the
+  // brief flash of (tabs) or another default route before the Stack settles
+  // on the splash screen.
+  useEffect(() => {
+    if (!isAuthLoading) {
+      void SplashScreen.hideAsync();
+    }
+  }, [isAuthLoading]);
+
+  if (isAuthLoading) {
+    return null;
+  }
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>

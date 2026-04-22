@@ -37,7 +37,7 @@ export default function SplashScreen() {
         if (cancelled) return;
         router.replace('/(tabs)');
       }
-    }, 1200);
+    }, 900);
     return () => {
       cancelled = true;
       clearTimeout(timer);
