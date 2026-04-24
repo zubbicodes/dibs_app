@@ -16,6 +16,8 @@ import { ThemeModeProvider, useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider, useAuth } from '@/hooks/use-auth';
 import { DemoSessionProvider } from '@/hooks/demo-session';
 import { FaceModelProvider } from '@/hooks/use-face-model';
+import { ScreenshotProtectionProvider } from '@/hooks/use-screenshot-protection';
+import { WatermarkProvider } from '@/hooks/use-watermark';
 import {
   Poppins_400Regular,
   Poppins_500Medium,
@@ -63,7 +65,11 @@ export default function RootLayout() {
         <DemoSessionProvider>
           <AuthProvider>
             <FaceModelProvider>
-              <RootNavigator />
+              <ScreenshotProtectionProvider>
+                <WatermarkProvider>
+                  <RootNavigator />
+                </WatermarkProvider>
+              </ScreenshotProtectionProvider>
             </FaceModelProvider>
           </AuthProvider>
         </DemoSessionProvider>

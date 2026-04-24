@@ -28,6 +28,7 @@ import { Colors, FontFamilies } from '@/constants/theme';
 import { useDemoSession } from '@/hooks/demo-session';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/hooks/use-auth';
+import { WatermarkOverlay } from '@/components/watermark-overlay';
 import { supabase } from '@/lib/supabase';
 
 type Filter = 'all' | 'photos' | 'videos';
@@ -443,6 +444,7 @@ export default function VaultScreen() {
                     <MaterialIcons name="play-arrow" size={14} color="#FFF" />
                   </View>
                 )}
+                <WatermarkOverlay size={80} />
               </Pressable>
             )}
           />

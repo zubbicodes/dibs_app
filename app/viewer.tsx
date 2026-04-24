@@ -12,6 +12,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { supabase } from '@/lib/supabase';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { WatermarkOverlay } from '@/components/watermark-overlay';
 
 export default function ViewerScreen() {
   const router = useRouter();
@@ -91,6 +92,7 @@ export default function ViewerScreen() {
             contentFit="contain"
           />
         )}
+        <WatermarkOverlay size={200} />
       </View>
 
       {/* Footer FAB */}

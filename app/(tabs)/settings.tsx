@@ -2,9 +2,10 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Modal,
   Platform,
   Pressable,
@@ -21,6 +22,9 @@ import { Colors, FontFamilies } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 import { useColorScheme, useSetColorScheme } from '@/hooks/use-color-scheme';
 import { useViewportDimensions } from '@/hooks/use-viewport-dimensions';
+import { useScreenshotProtection } from '@/hooks/use-screenshot-protection';
+import { useWatermark } from '@/hooks/use-watermark';
+import { useDemoSession } from '@/hooks/demo-session';
 import { ResponsiveWrapper } from '@/components/responsive-wrapper';
 import { deleteEnrollment } from '@/lib/face-recognition';
 import { supabase } from '@/lib/supabase';
@@ -31,15 +35,71 @@ const SettingsScreen = () => {
   const theme = Colors[colorScheme];
   const setColorScheme = useSetColorScheme();
   const { user, signOut } = useAuth();
+  const { isVaultVerified } = useDemoSession();
   const insets = useSafeAreaInsets();
   const { isMobile, isTablet } = useViewportDimensions();
 
   const [darkMode, setDarkMode] = useState(colorScheme === 'dark');
   const [offlineAccess, setOfflineAccess] = useState(true);
   const [requireFaceScan, setRequireFaceScan] = useState(true);
+  const { screenshotProtectionEnabled, setScreenshotProtectionEnabled } = useScreenshotProtection();
+  const { watermarkEnabled, setWatermarkEnabled } = useWatermark();
+  const [screenshotModalVisible, setScreenshotModalVisible] = useState(false);
+  const [screenshotCountdown, setScreenshotCountdown] = useState(3);
+  const [screenshotCountingDown, setScreenshotCountingDown] = useState(false);
+  const [pendingScreenshotDisable, setPendingScreenshotDisable] = useState(false);
+  const [watermarkModalVisible, setWatermarkModalVisible] = useState(false);
+  const [watermarkCountdown, setWatermarkCountdown] = useState(3);
+  const [watermarkCountingDown, setWatermarkCountingDown] = useState(false);
+  const [pendingWatermarkDisable, setPendingWatermarkDisable] = useState(false);
   const [resetModalVisible, setResetModalVisible] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!screenshotModalVisible && pendingScreenshotDisable) {
+      const timer = setTimeout(() => {
+        setPendingScreenshotDisable(false);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [screenshotModalVisible, pendingScreenshotDisable]);
+
+  useEffect(() => {
+    if (pendingScreenshotDisable && isVaultVerified) {
+      setScreenshotProtectionEnabled(false);
+      setPendingScreenshotDisable(false);
+      setScreenshotModalVisible(false);
+      Alert.alert('Screen Protection Disabled', 'Screenshots and screen recordings are now allowed.');
+    }
+  }, [isVaultVerified, pendingScreenshotDisable]);
+
+  useEffect(() => {
+    if (pendingScreenshotDisable) {
+      const timer = setTimeout(() => {
+        setPendingScreenshotDisable(false);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [pendingScreenshotDisable]);
+
+  useEffect(() => {
+    if (pendingWatermarkDisable && isVaultVerified) {
+      setWatermarkEnabled(false);
+      setPendingWatermarkDisable(false);
+      setWatermarkModalVisible(false);
+      Alert.alert('Watermark Disabled', 'Media watermarks will no longer be displayed.');
+    }
+  }, [isVaultVerified, pendingWatermarkDisable]);
+
+  useEffect(() => {
+    if (pendingWatermarkDisable) {
+      const timer = setTimeout(() => {
+        setPendingWatermarkDisable(false);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [pendingWatermarkDisable]);
 
   const handleEnrollFace = () => {
     router.push('/(auth)/face-enroll');
@@ -74,6 +134,60 @@ const SettingsScreen = () => {
   const handleDarkMode = (value: boolean) => {
     setDarkMode(value);
     setColorScheme(value ? 'dark' : 'light');
+  };
+
+  const handleScreenshotToggle = async (value: boolean) => {
+    if (value === screenshotProtectionEnabled) return;
+    if (value) {
+      await setScreenshotProtectionEnabled(true);
+    } else {
+      setScreenshotModalVisible(true);
+      setScreenshotCountdown(3);
+      setScreenshotCountingDown(true);
+      const interval = setInterval(() => {
+        setScreenshotCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(interval);
+            setScreenshotCountingDown(false);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+  };
+
+  const handleConfirmDisableScreenshot = () => {
+    if (screenshotCountdown > 0) return;
+    setPendingScreenshotDisable(true);
+    router.push('/modal');
+  };
+
+  const handleWatermarkToggle = async (value: boolean) => {
+    if (value === watermarkEnabled) return;
+    if (value) {
+      await setWatermarkEnabled(true);
+    } else {
+      setWatermarkModalVisible(true);
+      setWatermarkCountdown(3);
+      setWatermarkCountingDown(true);
+      const interval = setInterval(() => {
+        setWatermarkCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(interval);
+            setWatermarkCountingDown(false);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+  };
+
+  const handleConfirmDisableWatermark = () => {
+    if (watermarkCountdown > 0) return;
+    setPendingWatermarkDisable(true);
+    router.push('/modal');
   };
 
   const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
@@ -205,6 +319,32 @@ const SettingsScreen = () => {
                   />
                 </View>
                 <View style={[styles.divider, { backgroundColor: dividerColor }]} />
+                <View style={styles.row}>
+                  <LinearGradient colors={['#F59E0B', '#D97706']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.iconCircle}>
+                    <MaterialIcons name="screenshot-monitor" size={14} color="#FFF" />
+                  </LinearGradient>
+                  <ThemedText style={[styles.rowLabel, { color: theme.text, fontSize: isMobile ? 12 : 15 }]}>Block Screenshots & Recording</ThemedText>
+                  <Switch
+                    value={screenshotProtectionEnabled}
+                    onValueChange={handleScreenshotToggle}
+                    trackColor={{ false: theme.border, true: toggleTrackOn }}
+                    thumbColor="#D9D9D9"
+                  />
+                </View>
+                <View style={[styles.divider, { backgroundColor: dividerColor }]} />
+                <View style={styles.row}>
+                  <LinearGradient colors={['#8B5CF6', '#7C3AED']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.iconCircle}>
+                    <MaterialIcons name="waves" size={14} color="#FFF" />
+                  </LinearGradient>
+                  <ThemedText style={[styles.rowLabel, { color: theme.text, fontSize: isMobile ? 12 : 15 }]}>Media Watermark</ThemedText>
+                  <Switch
+                    value={watermarkEnabled}
+                    onValueChange={handleWatermarkToggle}
+                    trackColor={{ false: theme.border, true: toggleTrackOn }}
+                    thumbColor="#D9D9D9"
+                  />
+                </View>
+                <View style={[styles.divider, { backgroundColor: dividerColor }]} />
                 <Pressable style={({ pressed }) => [styles.row, { opacity: pressed ? 0.9 : 1 }]}>
                   <LinearGradient colors={['#F2EA1B', '#C0B800']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.iconCircle}>
                     <MaterialIcons name="fingerprint" size={14} color="#FFF" />
@@ -314,6 +454,120 @@ const SettingsScreen = () => {
                     Reset
                   </ThemedText>
                 )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={screenshotModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setScreenshotModalVisible(false)}>
+        <View style={styles.modalBackdrop}>
+          <View
+            style={[
+              styles.modalCard,
+              { backgroundColor: theme.background, borderColor: theme.border },
+            ]}>
+            <View style={[styles.modalIconWrap, { backgroundColor: 'rgba(245, 158, 11, 0.12)' }]}>
+              <MaterialIcons name="warning-amber" size={30} color="#F59E0B" />
+            </View>
+            <ThemedText style={[styles.modalTitle, { color: theme.text }]}>
+              Disable Screen Protection?
+            </ThemedText>
+            <ThemedText style={[styles.modalBody, { color: theme.mutedText }]}>
+              Disabling this will allow screenshots and screen recordings of the app. Your protected media may be captured by other apps or screenshots.
+            </ThemedText>
+
+            <View style={styles.modalButtonRow}>
+              <Pressable
+                onPress={() => {
+                  setScreenshotModalVisible(false);
+                  setPendingScreenshotDisable(false);
+                }}
+                style={({ pressed }) => [
+                  styles.modalButton,
+                  styles.modalButtonSecondary,
+                  { borderColor: theme.border, opacity: pressed ? 0.85 : 1 },
+                ]}>
+                <ThemedText style={[styles.modalButtonText, { color: theme.text }]}>
+                  Cancel
+                </ThemedText>
+              </Pressable>
+              <Pressable
+                onPress={handleConfirmDisableScreenshot}
+                disabled={screenshotCountdown > 0}
+                style={({ pressed }) => [
+                  styles.modalButton,
+                  styles.modalButtonPrimary,
+                  {
+                    backgroundColor: '#F59E0B',
+                    opacity: pressed || screenshotCountdown > 0 ? 0.9 : 1,
+                    minWidth: screenshotCountdown > 0 ? 140 : 160,
+                  },
+                ]}>
+                <ThemedText style={[styles.modalButtonText, { color: '#FFF', fontSize: 13 }]}>
+                  {screenshotCountdown > 0 ? `Wait ${screenshotCountdown}s...` : 'I Understand'}
+                </ThemedText>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={watermarkModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setWatermarkModalVisible(false)}>
+        <View style={styles.modalBackdrop}>
+          <View
+            style={[
+              styles.modalCard,
+              { backgroundColor: theme.background, borderColor: theme.border },
+            ]}>
+            <View style={[styles.modalIconWrap, { backgroundColor: 'rgba(139, 92, 246, 0.12)' }]}>
+              <MaterialIcons name="waves" size={30} color="#8B5CF6" />
+            </View>
+            <ThemedText style={[styles.modalTitle, { color: theme.text }]}>
+              Disable Watermark?
+            </ThemedText>
+            <ThemedText style={[styles.modalBody, { color: theme.mutedText }]}>
+              Disabling watermark will remove the PROTECTED overlay from your media. Your content will no longer display the security badge.
+            </ThemedText>
+
+            <View style={styles.modalButtonRow}>
+              <Pressable
+                onPress={() => {
+                  setWatermarkModalVisible(false);
+                  setPendingWatermarkDisable(false);
+                }}
+                style={({ pressed }) => [
+                  styles.modalButton,
+                  styles.modalButtonSecondary,
+                  { borderColor: theme.border, opacity: pressed ? 0.85 : 1 },
+                ]}>
+                <ThemedText style={[styles.modalButtonText, { color: theme.text }]}>
+                  Cancel
+                </ThemedText>
+              </Pressable>
+              <Pressable
+                onPress={handleConfirmDisableWatermark}
+                disabled={watermarkCountdown > 0}
+                style={({ pressed }) => [
+                  styles.modalButton,
+                  styles.modalButtonPrimary,
+                  {
+                    backgroundColor: '#8B5CF6',
+                    opacity: pressed || watermarkCountdown > 0 ? 0.9 : 1,
+                    minWidth: watermarkCountdown > 0 ? 140 : 160,
+                  },
+                ]}>
+                <ThemedText style={[styles.modalButtonText, { color: '#FFF', fontSize: 13 }]}>
+                  {watermarkCountdown > 0 ? `Wait ${watermarkCountdown}s...` : 'I Understand'}
+                </ThemedText>
               </Pressable>
             </View>
           </View>
@@ -490,10 +744,14 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    minWidth: 100,
   },
   modalButtonSecondary: {
     backgroundColor: 'transparent',
     borderWidth: 1,
+  },
+  modalButtonPrimary: {
+    minWidth: 140,
   },
   modalButtonText: {
     fontSize: 14,

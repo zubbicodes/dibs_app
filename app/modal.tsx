@@ -214,7 +214,7 @@ function NativeVerificationModal({
           status: 'verified',
           type: 'success',
         });
-        setTimeout(() => router.replace('/(tabs)/vault'), 500);
+        setTimeout(() => router.back(), 500);
       } else {
         setStatus('failed');
         setErrorMsg(`Face did not match (similarity ${sim.toFixed(3)})`);
@@ -314,7 +314,7 @@ function NativeVerificationModal({
         status: 'verified',
         type: 'success',
       });
-      setTimeout(() => router.replace('/(tabs)/vault'), 400);
+      setTimeout(() => router.back(), 400);
     }
   }, [router, user, verifyVault]);
 
