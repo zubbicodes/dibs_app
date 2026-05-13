@@ -1,18 +1,27 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Platform, Pressable, StyleSheet, View, ActivityIndicator } from 'react-native';
-import { Image } from 'expo-image';
-import { Video, ResizeMode } from 'expo-av';
+import { ResizeMode, Video } from 'expo-av';
 import * as FileSystem from 'expo-file-system/legacy';
+import { Image } from 'expo-image';
 import * as MediaLibrary from 'expo-media-library';
-import { useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Camera, runAtTargetFps, useCameraDevice, useCameraPermission, useFrameProcessor } from 'react-native-vision-camera';
+import { Worklets } from 'react-native-worklets-core';
+import { useResizePlugin } from 'vision-camera-resize-plugin';
 
-import { useAuth } from '@/hooks/use-auth';
-import { supabase } from '@/lib/supabase';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { PhoneDetectorOverlay } from '@/components/phone-detector-overlay';
 import { WatermarkOverlay } from '@/components/watermark-overlay';
+import { PHONE_DETECTION_FPS } from '@/constants/detection';
+import { Colors } from '@/constants/theme';
+import { useAuth } from '@/hooks/use-auth';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { usePhoneDetectionModel } from '@/hooks/use-phone-detection-model';
+import { usePhoneDetection } from '@/hooks/use-phone-detector';
+import { logPhoneDetectionEvent } from '@/lib/phone-detection-logger';
+import { MODEL_INPUT_SIZE, emptyPhoneDetectionResult, parsePhoneDetectionOutputs } from '@/lib/phone-detector';
+import { supabase } from '@/lib/supabase';
 
 export default function ViewerScreen() {
   const router = useRouter();
@@ -21,6 +30,84 @@ export default function ViewerScreen() {
   const { user } = useAuth();
   const colorScheme = useColorScheme() ?? 'dark';
   const theme = Colors[colorScheme];
+  const { hasPermission, requestPermission } = useCameraPermission();
+  const cameraRef = useRef<Camera>(null);
+  const {
+    updateDetectionState,
+    isExternalDeviceDetected,
+    confidence,
+    resetDetection,
+  } = usePhoneDetection();
+  const { boxedModel } = usePhoneDetectionModel();
+  const { resize } = useResizePlugin();
+  const previousDetectionRef = useRef<boolean | null>(null);
+  const screenActive = true;
+
+  // Request camera permission on mount
+  useEffect(() => {
+    if (!hasPermission) {
+      void requestPermission();
+    }
+    return () => {
+      resetDetection();
+    };
+  }, [hasPermission, requestPermission, resetDetection]);
+
+  useEffect(() => {
+    if (!user?.id || previousDetectionRef.current === isExternalDeviceDetected) return;
+
+    const previousDetection = previousDetectionRef.current;
+    previousDetectionRef.current = isExternalDeviceDetected;
+
+    if (previousDetection === null) return;
+
+    void logPhoneDetectionEvent({
+      user_id: user.id,
+      screen: 'viewer',
+      event_type: isExternalDeviceDetected ? 'DETECTED' : 'CLEARED',
+      confidence,
+      device_info: { platform: Platform.OS },
+    });
+  }, [confidence, isExternalDeviceDetected, user?.id]);
+
+  const onPhoneDetection = Worklets.createRunOnJS(updateDetectionState);
+
+  // Frame processor for phone detection.
+  const frameProcessor = useFrameProcessor(
+    (frame) => {
+      'worklet';
+      runAtTargetFps(PHONE_DETECTION_FPS, () => {
+        'worklet';
+        try {
+          if (!boxedModel) {
+            onPhoneDetection(emptyPhoneDetectionResult());
+            return;
+          }
+
+          const model = boxedModel.unbox();
+          const resized = resize(frame, {
+            scale: {
+              width: MODEL_INPUT_SIZE,
+              height: MODEL_INPUT_SIZE,
+            },
+            pixelFormat: 'rgb',
+            dataType: 'uint8',
+          });
+          const inputBuffer = resized.buffer.slice(
+            resized.byteOffset,
+            resized.byteOffset + resized.byteLength
+          ) as ArrayBuffer;
+          const outputs = model.runSync([inputBuffer]);
+          onPhoneDetection(parsePhoneDetectionOutputs(outputs));
+        } catch {
+          onPhoneDetection(emptyPhoneDetectionResult());
+        }
+      });
+    },
+    [boxedModel, onPhoneDetection, resize]
+  );
+
+  const device = useCameraDevice('front');
 
   const handleDownload = async () => {
     if (!url) return;
@@ -68,6 +155,18 @@ export default function ViewerScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      {/* Hidden camera for phone detection */}
+      {screenActive && hasPermission && device && (
+        <Camera
+          ref={cameraRef}
+          style={styles.detectorCamera}
+          pointerEvents="none"
+          device={device}
+          isActive={screenActive}
+          frameProcessor={frameProcessor}
+        />
+      )}
+
       {/* Header */}
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.iconButton}>
@@ -103,6 +202,9 @@ export default function ViewerScreen() {
           <MaterialIcons name="download" size={28} color="#FFF" />
         )}
       </Pressable>
+
+      {/* Phone detection overlay */}
+      {isExternalDeviceDetected && <PhoneDetectorOverlay />}
     </SafeAreaView>
   );
 }
@@ -150,5 +252,13 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
     zIndex: 20,
+  },
+  detectorCamera: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    width: 64,
+    height: 64,
+    opacity: 0.01,
   },
 });

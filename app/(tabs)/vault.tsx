@@ -1,34 +1,42 @@
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Image } from 'expo-image';
-import { useRouter, useFocusEffect } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  Modal,
-  Platform,
-  Pressable,
-  RefreshControl,
-  StyleSheet,
-  View,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useViewportDimensions } from '@/hooks/use-viewport-dimensions';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import * as FileSystem from 'expo-file-system/legacy';
-import * as MediaLibrary from 'expo-media-library';
-import * as Sharing from 'expo-sharing';
 import * as Haptics from 'expo-haptics';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as MediaLibrary from 'expo-media-library';
+import { useFocusEffect, useRouter } from 'expo-router';
+import * as Sharing from 'expo-sharing';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+    ActivityIndicator,
+    Alert,
+    FlatList,
+    Modal,
+    Platform,
+    Pressable,
+    RefreshControl,
+    StyleSheet,
+    View,
+} from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Camera, runAtTargetFps, useCameraDevice, useCameraPermission, useFrameProcessor } from 'react-native-vision-camera';
+import { Worklets } from 'react-native-worklets-core';
+import { useResizePlugin } from 'vision-camera-resize-plugin';
 
+import { PhoneDetectorOverlay } from '@/components/phone-detector-overlay';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { WatermarkOverlay } from '@/components/watermark-overlay';
+import { PHONE_DETECTION_FPS } from '@/constants/detection';
 import { Colors, FontFamilies } from '@/constants/theme';
 import { useDemoSession } from '@/hooks/demo-session';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/hooks/use-auth';
-import { WatermarkOverlay } from '@/components/watermark-overlay';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { usePhoneDetectionModel } from '@/hooks/use-phone-detection-model';
+import { usePhoneDetection } from '@/hooks/use-phone-detector';
+import { logPhoneDetectionEvent } from '@/lib/phone-detection-logger';
+import { MODEL_INPUT_SIZE, emptyPhoneDetectionResult, parsePhoneDetectionOutputs } from '@/lib/phone-detector';
 import { supabase } from '@/lib/supabase';
 
 type Filter = 'all' | 'photos' | 'videos';
@@ -51,8 +59,19 @@ export default function VaultScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [actionItem, setActionItem] = useState<VaultItem | null>(null);
   const [busy, setBusy] = useState(false);
-
   const { user } = useAuth();
+  const { hasPermission, requestPermission } = useCameraPermission();
+  const cameraRef = useRef<Camera>(null);
+  const {
+    updateDetectionState,
+    isExternalDeviceDetected,
+    confidence,
+    resetDetection,
+  } = usePhoneDetection();
+  const { boxedModel } = usePhoneDetectionModel();
+  const { resize } = useResizePlugin();
+  const [screenFocused, setScreenFocused] = useState(false);
+  const previousDetectionRef = useRef<boolean | null>(null);
 
   const padding = 16;
   const gap = 10;
@@ -61,6 +80,76 @@ export default function VaultScreen() {
   const tileWidth = (containerWidth - padding * 2 - gap * (cols - 1)) / cols;
 
   const [items, setItems] = useState<VaultItem[]>([]);
+
+  // Request camera permission on screen focus
+  useFocusEffect(
+    useCallback(() => {
+      setScreenFocused(true);
+      if (!hasPermission) {
+        void requestPermission();
+      }
+      return () => {
+        setScreenFocused(false);
+        resetDetection();
+      };
+    }, [hasPermission, requestPermission, resetDetection])
+  );
+
+  const onPhoneDetection = Worklets.createRunOnJS(updateDetectionState);
+
+  // Frame processor for phone detection.
+  const frameProcessor = useFrameProcessor(
+    (frame) => {
+      'worklet';
+      runAtTargetFps(PHONE_DETECTION_FPS, () => {
+        'worklet';
+        try {
+          if (!boxedModel) {
+            onPhoneDetection(emptyPhoneDetectionResult());
+            return;
+          }
+
+          const model = boxedModel.unbox();
+          const resized = resize(frame, {
+            scale: {
+              width: MODEL_INPUT_SIZE,
+              height: MODEL_INPUT_SIZE,
+            },
+            pixelFormat: 'rgb',
+            dataType: 'uint8',
+          });
+          const inputBuffer = resized.buffer.slice(
+            resized.byteOffset,
+            resized.byteOffset + resized.byteLength
+          ) as ArrayBuffer;
+          const outputs = model.runSync([inputBuffer]);
+          onPhoneDetection(parsePhoneDetectionOutputs(outputs));
+        } catch {
+          onPhoneDetection(emptyPhoneDetectionResult());
+        }
+      });
+    },
+    [boxedModel, onPhoneDetection, resize]
+  );
+
+  const device = useCameraDevice('front');
+
+  useEffect(() => {
+    if (!user?.id || previousDetectionRef.current === isExternalDeviceDetected) return;
+
+    const previousDetection = previousDetectionRef.current;
+    previousDetectionRef.current = isExternalDeviceDetected;
+
+    if (previousDetection === null) return;
+
+    void logPhoneDetectionEvent({
+      user_id: user.id,
+      screen: 'vault',
+      event_type: isExternalDeviceDetected ? 'DETECTED' : 'CLEARED',
+      confidence,
+      device_info: { platform: Platform.OS },
+    });
+  }, [confidence, isExternalDeviceDetected, user?.id]);
 
   const loadVault = useCallback(async () => {
     if (!user?.id) return;
@@ -288,6 +377,18 @@ export default function VaultScreen() {
 
   return (
     <ThemedView style={styles.screen}>
+      {/* Hidden camera for phone detection */}
+      {screenFocused && hasPermission && device && (
+        <Camera
+          ref={cameraRef}
+          style={styles.detectorCamera}
+          pointerEvents="none"
+          device={device}
+          isActive={screenFocused}
+          frameProcessor={frameProcessor}
+        />
+      )}
+
       <SafeAreaView edges={['top']} style={styles.safeArea}>
         {/* Sticky header + filters */}
         <View
@@ -512,6 +613,9 @@ export default function VaultScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Phone detection overlay */}
+      {isExternalDeviceDetected && <PhoneDetectorOverlay />}
     </ThemedView>
   );
 }
@@ -719,5 +823,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 16,
     top: 16,
+  },
+  detectorCamera: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    width: 64,
+    height: 64,
+    opacity: 0.01,
   },
 });

@@ -1,3 +1,23 @@
+import { ErrorBoundary } from '@/components/error-boundary';
+import { ThemedText } from '@/components/themed-text';
+import { ThemedView } from '@/components/themed-view';
+import { Colors, FontFamilies } from '@/constants/theme';
+import { DemoSessionProvider } from '@/hooks/demo-session';
+import { AuthProvider, useAuth } from '@/hooks/use-auth';
+import { ThemeModeProvider, useColorScheme } from '@/hooks/use-color-scheme';
+import { FaceModelProvider } from '@/hooks/use-face-model';
+import { PhoneDetectionProvider } from '@/hooks/use-phone-detector';
+import { ScreenshotProtectionProvider } from '@/hooks/use-screenshot-protection';
+import { MOBILE_VIEWPORT, WebViewportContext, useViewportDimensions } from '@/hooks/use-viewport-dimensions';
+import { WatermarkProvider } from '@/hooks/use-watermark';
+import {
+    Poppins_400Regular,
+    Poppins_500Medium,
+    Poppins_600SemiBold,
+    Poppins_700Bold,
+    Poppins_800ExtraBold,
+    useFonts,
+} from '@expo-google-fonts/poppins';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack, usePathname, useRouter } from 'expo-router';
@@ -7,25 +27,6 @@ import type { ReactNode } from 'react';
 import { useEffect } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import 'react-native-reanimated';
-import { ErrorBoundary } from '@/components/error-boundary';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Colors, FontFamilies } from '@/constants/theme';
-import { MOBILE_VIEWPORT, WebViewportContext, useViewportDimensions } from '@/hooks/use-viewport-dimensions';
-import { ThemeModeProvider, useColorScheme } from '@/hooks/use-color-scheme';
-import { AuthProvider, useAuth } from '@/hooks/use-auth';
-import { DemoSessionProvider } from '@/hooks/demo-session';
-import { FaceModelProvider } from '@/hooks/use-face-model';
-import { ScreenshotProtectionProvider } from '@/hooks/use-screenshot-protection';
-import { WatermarkProvider } from '@/hooks/use-watermark';
-import {
-  Poppins_400Regular,
-  Poppins_500Medium,
-  Poppins_600SemiBold,
-  Poppins_700Bold,
-  Poppins_800ExtraBold,
-  useFonts,
-} from '@expo-google-fonts/poppins';
 
 export const unstable_settings = {
   anchor: 'splash',
@@ -66,9 +67,11 @@ export default function RootLayout() {
           <AuthProvider>
             <FaceModelProvider>
               <ScreenshotProtectionProvider>
-                <WatermarkProvider>
-                  <RootNavigator />
-                </WatermarkProvider>
+                <PhoneDetectionProvider>
+                  <WatermarkProvider>
+                    <RootNavigator />
+                  </WatermarkProvider>
+                </PhoneDetectionProvider>
               </ScreenshotProtectionProvider>
             </FaceModelProvider>
           </AuthProvider>
