@@ -32,9 +32,10 @@ import {
   useCameraDevice,
   useCameraPermission,
   useFrameProcessor,
-} from 'react-native-vision-camera';
-import { useFaceDetector, type Face } from 'react-native-vision-camera-face-detector';
-import { Worklets } from 'react-native-worklets-core';
+  useFaceDetector,
+  type Face,
+  Worklets,
+} from '@/lib/native-camera';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';

@@ -1,6 +1,6 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { loadTensorflowModel, type TensorflowModel } from 'react-native-fast-tflite';
+import { loadTensorflowModel, type TensorflowModel } from '@/lib/native-tflite';
 
 const MODEL_URL =
   'https://koavgdbgmiornyxbqjva.supabase.co/storage/v1/object/public/facemodel/mobilefacenet.tflite';

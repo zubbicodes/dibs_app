@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { useViewportDimensions } from '@/hooks/use-viewport-dimensions';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -19,9 +19,13 @@ export default function SplashScreen() {
   const router = useRouter();
   const { session, isLoading } = useAuth();
   const { width, height } = useViewportDimensions();
+  const didRedirect = useRef(false);
 
   useEffect(() => {
     if (isLoading) return;
+    if (didRedirect.current) return;
+    didRedirect.current = true;
+
     let cancelled = false;
     const timer = setTimeout(async () => {
       if (cancelled) return;
@@ -42,7 +46,7 @@ export default function SplashScreen() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [session, isLoading, router]);
+  }, [isLoading, router, session]);
 
   return (
     <View style={styles.screen}>

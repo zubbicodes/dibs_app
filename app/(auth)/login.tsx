@@ -71,7 +71,7 @@ export default function LoginScreen() {
                 textContentType="password"
               />
               <Pressable
-                onPress={() => {}} // Forgot password logic
+                onPress={() => router.push('/(auth)/forgot-password')}
                 style={styles.forgotWrap}
                 hitSlop={8}>
                 <ThemedText style={[styles.forgotText, { color: theme.accent }]}>Forgot password?</ThemedText>

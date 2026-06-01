@@ -10,6 +10,13 @@ type AuthContextValue = {
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
+  sendPasswordReset: (email: string) => Promise<{ error: Error | null }>;
+  verifyOtp: (email: string, token: string) => Promise<{ error: Error | null }>;
+  updatePassword: (newPassword: string) => Promise<{ error: Error | null }>;
+  updateEmail: (newEmail: string) => Promise<{ error: Error | null }>;
+  updateName: (fullName: string) => Promise<{ error: Error | null }>;
+  updateAvatar: (avatarUrl: string) => Promise<{ error: Error | null }>;
+  refreshUser: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -53,6 +60,59 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       signOut: async () => {
         await supabase.auth.signOut();
+      },
+
+      sendPasswordReset: async (email: string) => {
+        // Sends a 6-digit OTP via email if the user exists.
+        // shouldCreateUser: false prevents creating new accounts.
+        const { error } = await supabase.auth.signInWithOtp({
+          email,
+          options: { shouldCreateUser: false },
+        });
+        return { error };
+      },
+
+      verifyOtp: async (email: string, token: string) => {
+        // Verifies the 6-digit OTP and signs the user in (creates a session).
+        const { error } = await supabase.auth.verifyOtp({
+          email,
+          token,
+          type: 'email',
+        });
+        return { error };
+      },
+
+      updatePassword: async (newPassword: string) => {
+        const { error } = await supabase.auth.updateUser({ password: newPassword });
+        return { error };
+      },
+
+      updateEmail: async (newEmail: string) => {
+        const { error } = await supabase.auth.updateUser({ email: newEmail });
+        return { error };
+      },
+
+      updateName: async (fullName: string) => {
+        const { error } = await supabase.auth.updateUser({
+          data: { full_name: fullName },
+        });
+        return { error };
+      },
+
+      updateAvatar: async (avatarUrl: string) => {
+        const { error } = await supabase.auth.updateUser({
+          data: { avatar_url: avatarUrl },
+        });
+        return { error };
+      },
+
+      refreshUser: async () => {
+        const { data } = await supabase.auth.getUser();
+        if (data.user) {
+          setSession((prev) =>
+            prev ? { ...prev, user: data.user } : null
+          );
+        }
       },
     }),
     [session, isLoading]

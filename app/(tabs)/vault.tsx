@@ -22,9 +22,16 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Camera, runAtTargetFps, useCameraDevice, useCameraPermission, useFrameProcessor, type CameraRuntimeError } from 'react-native-vision-camera';
-import { Worklets } from 'react-native-worklets-core';
-import { useResizePlugin } from 'vision-camera-resize-plugin';
+import {
+  Camera,
+  runAtTargetFps,
+  useCameraDevice,
+  useCameraPermission,
+  useFrameProcessor,
+  type CameraRuntimeError,
+  Worklets,
+  useResizePlugin,
+} from '@/lib/native-camera';
 
 import { PhoneDetectorOverlay } from '@/components/phone-detector-overlay';
 import { ThemedText } from '@/components/themed-text';

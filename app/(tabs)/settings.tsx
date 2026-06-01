@@ -220,7 +220,9 @@ const SettingsScreen = () => {
               {/* --- Account --- */}
               <ThemedText style={[styles.sectionTitle, { color: sectionTitleColor }]}>Account</ThemedText>
               <View style={[styles.block, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-                <Pressable style={({ pressed }) => [styles.profileRow, { opacity: pressed ? 0.9 : 1 }]}>
+                <Pressable
+                  onPress={() => router.push('/edit-profile')}
+                  style={({ pressed }) => [styles.profileRow, { opacity: pressed ? 0.9 : 1 }]}>
                   <Image
                     source={require('../../assets/images/face.png')}
                     style={[styles.avatar, !isMobile && { width: 80, height: 80, borderRadius: 40 }]}

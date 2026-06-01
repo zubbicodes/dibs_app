@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
-import { NitroModules } from 'react-native-nitro-modules';
-import { useTensorflowModel } from 'react-native-fast-tflite';
+import { NitroModules } from '@/lib/native-nitro';
+import { useTensorflowModel } from '@/lib/native-tflite';
 
 export function usePhoneDetectionModel() {
   const plugin = useTensorflowModel(
