@@ -4,10 +4,11 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { Image } from 'expo-image';
 import * as MediaLibrary from 'expo-media-library';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, AppState, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Camera, runAtTargetFps, useCameraDevice, useCameraPermission, useFrameProcessor } from 'react-native-vision-camera';
+import { Camera, runAtTargetFps, useCameraDevice, useCameraPermission, useFrameProcessor, type CameraRuntimeError } from 'react-native-vision-camera';
 import { Worklets } from 'react-native-worklets-core';
 import { useResizePlugin } from 'vision-camera-resize-plugin';
 
@@ -23,8 +24,11 @@ import { logPhoneDetectionEvent } from '@/lib/phone-detection-logger';
 import { MODEL_INPUT_SIZE, emptyPhoneDetectionResult, parsePhoneDetectionOutputs } from '@/lib/phone-detector';
 import { supabase } from '@/lib/supabase';
 
+const DETECTOR_CAMERA_START_DELAY_MS = 800;
+
 export default function ViewerScreen() {
   const router = useRouter();
+  const isFocused = useIsFocused();
   const { url, type } = useLocalSearchParams<{ url: string; type: string }>();
   const [isDownloading, setIsDownloading] = useState(false);
   const { user } = useAuth();
@@ -38,20 +42,69 @@ export default function ViewerScreen() {
     confidence,
     resetDetection,
   } = usePhoneDetection();
-  const { boxedModel } = usePhoneDetectionModel();
+  const {
+    boxedModel,
+    error: phoneDetectionModelError,
+  } = usePhoneDetectionModel();
   const { resize } = useResizePlugin();
+  const device = useCameraDevice('front');
+  const [appState, setAppState] = useState(AppState.currentState);
+  const [detectorCameraReady, setDetectorCameraReady] = useState(false);
+  const [detectorCameraKey, setDetectorCameraKey] = useState(0);
   const previousDetectionRef = useRef<boolean | null>(null);
-  const screenActive = true;
+  const reportedFrameProcessorErrorRef = useRef(false);
 
-  // Request camera permission on mount
   useEffect(() => {
-    if (!hasPermission) {
+    const subscription = AppState.addEventListener('change', setAppState);
+    return () => subscription.remove();
+  }, []);
+
+  // Request camera permission while the viewer is active.
+  useEffect(() => {
+    if (isFocused && !hasPermission) {
       void requestPermission();
     }
     return () => {
       resetDetection();
     };
-  }, [hasPermission, requestPermission, resetDetection]);
+  }, [hasPermission, isFocused, requestPermission, resetDetection]);
+
+  useEffect(() => {
+    if (phoneDetectionModelError) {
+      console.warn('[PhoneDetector] Failed to load detection model:', phoneDetectionModelError);
+    }
+  }, [phoneDetectionModelError]);
+
+  const shouldPrepareDetectorCamera =
+    isFocused &&
+    appState === 'active' &&
+    hasPermission &&
+    Boolean(device);
+
+  useEffect(() => {
+    if (!shouldPrepareDetectorCamera) {
+      setDetectorCameraReady(false);
+      resetDetection();
+      return;
+    }
+
+    setDetectorCameraReady(false);
+    const timeout = setTimeout(() => {
+      setDetectorCameraReady(true);
+    }, DETECTOR_CAMERA_START_DELAY_MS);
+
+    return () => clearTimeout(timeout);
+  }, [detectorCameraKey, resetDetection, shouldPrepareDetectorCamera]);
+
+  const handleDetectorCameraError = (error: CameraRuntimeError) => {
+    console.warn('[PhoneDetector] Viewer camera error:', error.code, error.message);
+    resetDetection();
+    setDetectorCameraKey((key) => key + 1);
+  };
+
+  const detectorCameraActive =
+    shouldPrepareDetectorCamera &&
+    detectorCameraReady;
 
   useEffect(() => {
     if (!user?.id || previousDetectionRef.current === isExternalDeviceDetected) return;
@@ -71,6 +124,11 @@ export default function ViewerScreen() {
   }, [confidence, isExternalDeviceDetected, user?.id]);
 
   const onPhoneDetection = Worklets.createRunOnJS(updateDetectionState);
+  const onFrameProcessorError = Worklets.createRunOnJS((message: string) => {
+    if (reportedFrameProcessorErrorRef.current) return;
+    reportedFrameProcessorErrorRef.current = true;
+    console.warn('[PhoneDetector] Viewer frame processor failed:', message);
+  });
 
   // Frame processor for phone detection.
   const frameProcessor = useFrameProcessor(
@@ -99,15 +157,14 @@ export default function ViewerScreen() {
           ) as ArrayBuffer;
           const outputs = model.runSync([inputBuffer]);
           onPhoneDetection(parsePhoneDetectionOutputs(outputs));
-        } catch {
+        } catch (error) {
+          onFrameProcessorError(error == null ? 'Unknown error' : String(error));
           onPhoneDetection(emptyPhoneDetectionResult());
         }
       });
     },
-    [boxedModel, onPhoneDetection, resize]
+    [boxedModel, onFrameProcessorError, onPhoneDetection, resize]
   );
-
-  const device = useCameraDevice('front');
 
   const handleDownload = async () => {
     if (!url) return;
@@ -156,13 +213,18 @@ export default function ViewerScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       {/* Hidden camera for phone detection */}
-      {screenActive && hasPermission && device && (
+      {detectorCameraActive && device && (
         <Camera
+          key={`viewer-detector-${detectorCameraKey}`}
           ref={cameraRef}
           style={styles.detectorCamera}
           pointerEvents="none"
           device={device}
-          isActive={screenActive}
+          isActive={detectorCameraActive}
+          pixelFormat="yuv"
+          enableBufferCompression={false}
+          androidPreviewViewType="texture-view"
+          onError={handleDetectorCameraError}
           frameProcessor={frameProcessor}
         />
       )}

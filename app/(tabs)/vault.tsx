@@ -7,10 +7,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as MediaLibrary from 'expo-media-library';
 import { useFocusEffect, useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
+import { useIsFocused } from '@react-navigation/native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
+    AppState,
     FlatList,
     Modal,
     Platform,
@@ -20,7 +22,7 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Camera, runAtTargetFps, useCameraDevice, useCameraPermission, useFrameProcessor } from 'react-native-vision-camera';
+import { Camera, runAtTargetFps, useCameraDevice, useCameraPermission, useFrameProcessor, type CameraRuntimeError } from 'react-native-vision-camera';
 import { Worklets } from 'react-native-worklets-core';
 import { useResizePlugin } from 'vision-camera-resize-plugin';
 
@@ -48,8 +50,11 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: 'videos', label: 'Videos' },
 ];
 
+const DETECTOR_CAMERA_START_DELAY_MS = 800;
+
 export default function VaultScreen() {
   const router = useRouter();
+  const isFocused = useIsFocused();
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
   const { width, isMobile, isTablet } = useViewportDimensions();
@@ -68,10 +73,18 @@ export default function VaultScreen() {
     confidence,
     resetDetection,
   } = usePhoneDetection();
-  const { boxedModel } = usePhoneDetectionModel();
+  const {
+    boxedModel,
+    error: phoneDetectionModelError,
+  } = usePhoneDetectionModel();
   const { resize } = useResizePlugin();
+  const device = useCameraDevice('front');
   const [screenFocused, setScreenFocused] = useState(false);
+  const [appState, setAppState] = useState(AppState.currentState);
+  const [detectorCameraReady, setDetectorCameraReady] = useState(false);
+  const [detectorCameraKey, setDetectorCameraKey] = useState(0);
   const previousDetectionRef = useRef<boolean | null>(null);
+  const reportedFrameProcessorErrorRef = useRef(false);
 
   const padding = 16;
   const gap = 10;
@@ -80,6 +93,11 @@ export default function VaultScreen() {
   const tileWidth = (containerWidth - padding * 2 - gap * (cols - 1)) / cols;
 
   const [items, setItems] = useState<VaultItem[]>([]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', setAppState);
+    return () => subscription.remove();
+  }, []);
 
   // Request camera permission on screen focus
   useFocusEffect(
@@ -95,7 +113,54 @@ export default function VaultScreen() {
     }, [hasPermission, requestPermission, resetDetection])
   );
 
+  useEffect(() => {
+    if (phoneDetectionModelError) {
+      console.warn('[PhoneDetector] Failed to load detection model:', phoneDetectionModelError);
+    }
+  }, [phoneDetectionModelError]);
+
+  const shouldPrepareDetectorCamera =
+    screenFocused &&
+    isFocused &&
+    appState === 'active' &&
+    isVaultVerified &&
+    hasPermission &&
+    Boolean(device);
+
+  useEffect(() => {
+    if (!shouldPrepareDetectorCamera) {
+      setDetectorCameraReady(false);
+      resetDetection();
+      return;
+    }
+
+    setDetectorCameraReady(false);
+    const timeout = setTimeout(() => {
+      setDetectorCameraReady(true);
+    }, DETECTOR_CAMERA_START_DELAY_MS);
+
+    return () => clearTimeout(timeout);
+  }, [detectorCameraKey, resetDetection, shouldPrepareDetectorCamera]);
+
+  const handleDetectorCameraError = useCallback(
+    (error: CameraRuntimeError) => {
+      console.warn('[PhoneDetector] Vault camera error:', error.code, error.message);
+      resetDetection();
+      setDetectorCameraKey((key) => key + 1);
+    },
+    [resetDetection]
+  );
+
+  const detectorCameraActive =
+    shouldPrepareDetectorCamera &&
+    detectorCameraReady;
+
   const onPhoneDetection = Worklets.createRunOnJS(updateDetectionState);
+  const onFrameProcessorError = Worklets.createRunOnJS((message: string) => {
+    if (reportedFrameProcessorErrorRef.current) return;
+    reportedFrameProcessorErrorRef.current = true;
+    console.warn('[PhoneDetector] Vault frame processor failed:', message);
+  });
 
   // Frame processor for phone detection.
   const frameProcessor = useFrameProcessor(
@@ -124,15 +189,14 @@ export default function VaultScreen() {
           ) as ArrayBuffer;
           const outputs = model.runSync([inputBuffer]);
           onPhoneDetection(parsePhoneDetectionOutputs(outputs));
-        } catch {
+        } catch (error) {
+          onFrameProcessorError(error == null ? 'Unknown error' : String(error));
           onPhoneDetection(emptyPhoneDetectionResult());
         }
       });
     },
-    [boxedModel, onPhoneDetection, resize]
+    [boxedModel, onFrameProcessorError, onPhoneDetection, resize]
   );
-
-  const device = useCameraDevice('front');
 
   useEffect(() => {
     if (!user?.id || previousDetectionRef.current === isExternalDeviceDetected) return;
@@ -378,13 +442,18 @@ export default function VaultScreen() {
   return (
     <ThemedView style={styles.screen}>
       {/* Hidden camera for phone detection */}
-      {screenFocused && hasPermission && device && (
+      {detectorCameraActive && device && (
         <Camera
+          key={`vault-detector-${detectorCameraKey}`}
           ref={cameraRef}
           style={styles.detectorCamera}
           pointerEvents="none"
           device={device}
-          isActive={screenFocused}
+          isActive={detectorCameraActive}
+          pixelFormat="yuv"
+          enableBufferCompression={false}
+          androidPreviewViewType="texture-view"
+          onError={handleDetectorCameraError}
           frameProcessor={frameProcessor}
         />
       )}
