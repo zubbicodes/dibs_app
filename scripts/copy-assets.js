@@ -10,9 +10,13 @@ if (!fs.existsSync(srcModel)) {
   process.exit(0);
 }
 
-if (!fs.existsSync(destDir)) {
-  fs.mkdirSync(destDir, { recursive: true });
+try {
+  if (!fs.existsSync(destDir)) {
+    fs.mkdirSync(destDir, { recursive: true });
+  }
+  fs.copyFileSync(srcModel, destModel);
+  console.log('Copied model to android assets');
+} catch (err) {
+  console.log('Warning: Could not copy assets to Android - this is normal for non-Android builds:', err.message);
+  process.exit(0);
 }
-
-fs.copyFileSync(srcModel, destModel);
-console.log('Copied model to android assets');
