@@ -20,29 +20,42 @@ RUN if [ -f yarn.lock ]; then \
 # Copy remaining source code
 COPY . .
 
-# Build for web - Expo export
-RUN npm run web:build
+# Show available npm scripts
+RUN echo "=== Available npm scripts ===" && npm run 2>&1 | grep -E "^\s+(web|build)" || echo "No web build scripts found"
+
+# Try to build for web - use explicit Expo command with verbose output
+RUN echo "=== Starting Expo web export ===" && \
+    npm run web:build || npx expo export -p web --verbose
+
+# List root directory contents
+RUN echo "=== Root directory after build ===" && \
+    ls -la / | head -30
+
+# Find all directories and index.html files
+RUN echo "=== Searching for index.html ===" && \
+    find . -maxdepth 4 -name "index.html" -type f 2>/dev/null | head -20 || echo "No index.html found"
 
 # Find and verify build output - consolidate to /app/web-dist
 RUN mkdir -p /app/web-dist && \
-    if [ -d "dist" ] && [ -f "dist/index.html" ]; then \
-      echo "Copying from dist/"; \
-      cp -r dist/* /app/web-dist/; \
-    elif [ -d ".expo/web" ] && [ -f ".expo/web/index.html" ]; then \
-      echo "Copying from .expo/web/"; \
-      cp -r .expo/web/* /app/web-dist/; \
-    elif [ -d "static" ] && [ -f "static/index.html" ]; then \
-      echo "Copying from static/"; \
-      cp -r static/* /app/web-dist/; \
-    else \
-      echo "ERROR: No build output found"; \
-      echo "Checking for index.html:"; \
-      find . -maxdepth 3 -name "index.html" 2>/dev/null || echo "No index.html found"; \
-      ls -la . | head -30; \
+    found=0 && \
+    for dir in dist .expo/web web-build build static out; do \
+      if [ -d "$dir" ] && [ -f "$dir/index.html" ]; then \
+        echo "✓ Found build output in: $dir"; \
+        cp -r "$dir"/* /app/web-dist/ 2>/dev/null || true; \
+        found=1; \
+        break; \
+      fi; \
+    done && \
+    if [ $found -eq 0 ]; then \
+      echo "ERROR: No build output found in any expected directory"; \
+      echo "=== Current directory contents ===" && \
+      ls -la . | head -40 && \
+      echo "=== Searching all directories ===" && \
+      find . -type d -maxdepth 3 2>/dev/null | head -20 && \
       exit 1; \
     fi && \
-    echo "Build output consolidated to web-dist:" && \
-    ls -la /app/web-dist/ | head -20
+    echo "=== web-dist contents ===" && \
+    ls -la /app/web-dist/ | head -30
 
 # Stage 2: Runtime stage - lightweight Nginx only
 FROM nginx:alpine
