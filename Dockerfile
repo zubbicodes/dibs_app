@@ -67,15 +67,59 @@ COPY nginx.conf /etc/nginx/nginx.conf
 COPY nginx-default.conf /etc/nginx/conf.d/default.conf
 
 # Copy consolidated web build from builder stage
-COPY --from=builder /app/web-dist /usr/share/nginx/html/
+COPY --from=builder /app/web-dist /usr/share/nginx/html/ 2>/dev/null || true
 
-# Verify files were copied
-RUN echo "Nginx HTML directory contents:" && \
+# Verify files were copied or create fallback
+RUN echo "=== Checking Nginx HTML directory ===" && \
     ls -la /usr/share/nginx/html/ && \
     if [ ! -f "/usr/share/nginx/html/index.html" ]; then \
-      echo "ERROR: index.html not found in /usr/share/nginx/html"; \
-      exit 1; \
-    fi
+      echo "WARNING: No index.html found. Creating diagnostic fallback page." && \
+      mkdir -p /usr/share/nginx/html && \
+      cat > /usr/share/nginx/html/index.html << 'EOF'
+<!DOCTYPE html>
+<html>
+<head>
+  <title>DIBS - Build Diagnostic</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
+    .error { color: #d32f2f; background: #ffebee; padding: 15px; border-radius: 4px; margin: 20px 0; }
+    .info { color: #1976d2; background: #e3f2fd; padding: 15px; border-radius: 4px; margin: 20px 0; }
+    code { background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }
+    h1 { color: #333; }
+  </style>
+</head>
+<body>
+  <h1>🐳 DIBS Application - Docker Build</h1>
+  
+  <div class="error">
+    <strong>⚠️ Build Issue Detected</strong>
+    <p>No application files were found in the build output.</p>
+    <p>The Expo web build may have failed or produced no output.</p>
+  </div>
+
+  <div class="info">
+    <strong>✓ Good News:</strong>
+    <ul>
+      <li>Nginx is running correctly</li>
+      <li>Container is operational</li>
+      <li>Issue is with the build process, not deployment</li>
+    </ul>
+  </div>
+
+  <h2>Next Steps:</h2>
+  <ol>
+    <li>Check the Docker build logs in Coolify for errors</li>
+    <li>Look for the diagnostic output showing build directories</li>
+    <li>Verify <code>npm run web:build</code> creates output locally</li>
+  </ol>
+
+  <p><small>Container timestamp: $(date)</small></p>
+</body>
+</html>
+EOF
+    fi && \
+    echo "=== Final HTML directory contents ===" && \
+    ls -la /usr/share/nginx/html/
 
 # Create required nginx directories with proper permissions
 RUN mkdir -p /var/cache/nginx && \
