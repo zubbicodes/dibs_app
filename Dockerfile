@@ -4,10 +4,11 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Install dependencies with proper caching
+# Copy package files and scripts (needed for postinstall)
 COPY package*.json yarn.lock* pnpm-lock.yaml* ./
+COPY scripts ./scripts
 
-# Detect and use appropriate package manager
+# Install dependencies with proper caching
 RUN if [ -f yarn.lock ]; then \
       yarn install --frozen-lockfile; \
     elif [ -f pnpm-lock.yaml ]; then \
@@ -16,7 +17,7 @@ RUN if [ -f yarn.lock ]; then \
       npm install --frozen-lockfile --legacy-peer-deps; \
     fi
 
-# Copy source code
+# Copy remaining source code
 COPY . .
 
 # Build for web - Expo export
