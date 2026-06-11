@@ -13,7 +13,7 @@ RUN if [ -f yarn.lock ]; then \
     elif [ -f pnpm-lock.yaml ]; then \
       npm install -g pnpm && pnpm install --frozen-lockfile; \
     else \
-      npm install --frozen-lockfile; \
+      npm install --frozen-lockfile --legacy-peer-deps; \
     fi
 
 # Copy source code
