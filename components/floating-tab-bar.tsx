@@ -1,6 +1,6 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useRouter } from 'expo-router';
-import React from 'react';
+import React, { useState } from 'react';
 import { Image, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -13,7 +13,6 @@ import { supabase } from '@/lib/supabase';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { decode } from 'base64-arraybuffer';
-import { useState } from 'react';
 import { useDemoSession } from '@/hooks/demo-session';
 
 const TABS = [
@@ -68,23 +67,28 @@ export function FloatingTabBar({ state, navigation }: any) {
         setIsUploading(true);
         const asset = result.assets[0];
         
-        let base64Str = asset.base64;
-        // Videos don't return base64 from picker automatically in Expo, fetch it via FS:
-        if (!base64Str) {
-          base64Str = await FileSystem.readAsStringAsync(asset.uri, {
-            encoding: 'base64',
-          });
-        }
-        
-        if (!base64Str) throw new Error('Could not parse media bytes');
-
-        let fileExt = asset.uri.split('.').pop() || 'jpg';
+        let fileExt = asset.fileName?.split('.').pop() || asset.uri.split('.').pop() || 'jpg';
         if (asset.type === 'video' && !fileExt.match(/(mp4|mov|avi)/i)) fileExt = 'mp4';
         
         const filePath = `${user.id}/${Date.now()}.${fileExt}`;
-        const contentType = asset.type === 'video' ? 'video/mp4' : 'image/jpeg';
+        const contentType = asset.mimeType || (asset.type === 'video' ? 'video/mp4' : 'image/jpeg');
 
-        await supabase.storage.from('vault').upload(filePath, decode(base64Str), { contentType });
+        if (Platform.OS === 'web') {
+          const response = await fetch(asset.uri);
+          const blob = await response.blob();
+          await supabase.storage.from('vault').upload(filePath, blob, { contentType });
+        } else {
+          let base64Str = asset.base64;
+          // Videos don't return base64 from picker automatically in Expo, fetch it via FS:
+          if (!base64Str) {
+            base64Str = await FileSystem.readAsStringAsync(asset.uri, {
+              encoding: 'base64',
+            });
+          }
+          
+          if (!base64Str) throw new Error('Could not parse media bytes');
+          await supabase.storage.from('vault').upload(filePath, decode(base64Str), { contentType });
+        }
 
         await supabase.from('logs').insert({
           user_id: user.id,
@@ -96,7 +100,7 @@ export function FloatingTabBar({ state, navigation }: any) {
         });
         
         // Navigation forces a vault reload
-        router.push('/vault');
+        router.push('/(tabs)/vault');
       }
     } catch (err) {
       console.error('Upload Error:', err);

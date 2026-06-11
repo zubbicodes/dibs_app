@@ -30,6 +30,7 @@ import { usePhoneDetection } from '@/hooks/use-phone-detector';
 import { logPhoneDetectionEvent } from '@/lib/phone-detection-logger';
 import { MODEL_INPUT_SIZE, emptyPhoneDetectionResult, parsePhoneDetectionOutputs } from '@/lib/phone-detector';
 import { supabase } from '@/lib/supabase';
+import { downloadUrlInBrowser, getFilenameFromUrl } from '@/lib/web-files';
 
 const DETECTOR_CAMERA_START_DELAY_MS = 800;
 
@@ -177,6 +178,20 @@ export default function ViewerScreen() {
     if (!url) return;
     setIsDownloading(true);
     try {
+      if (Platform.OS === 'web') {
+        const filename = getFilenameFromUrl(url, `dibs_media_${Date.now()}`);
+        await downloadUrlInBrowser(url, filename);
+        await supabase.from('logs').insert({
+          user_id: user?.id,
+          name: user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User',
+          details: `Downloaded media`,
+          device: Platform.OS,
+          status: 'verified',
+          type: 'success',
+        });
+        return;
+      }
+
       const { status } = await MediaLibrary.requestPermissionsAsync();
 
       if (status !== 'granted') {

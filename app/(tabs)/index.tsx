@@ -3,7 +3,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useState, useEffect } from 'react';
-import { ScrollView, StyleSheet, View, Pressable } from 'react-native';
+import { Platform, ScrollView, StyleSheet, View, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { DibsLogo } from '@/components/dibs-logo';
@@ -50,7 +50,7 @@ export default function HomeScreen() {
   const theme = Colors[colorScheme];
   const router = useRouter();
   const { user } = useAuth();
-  const { isMobile, isTablet } = useViewportDimensions();
+  const { isMobile, isTablet, isDesktop } = useViewportDimensions();
   const [sideMenuOpen, setSideMenuOpen] = useState(false);
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [stats, setStats] = useState({ images: 0, videos: 0 });
@@ -118,8 +118,9 @@ export default function HomeScreen() {
     <ThemedView style={styles.screen}>
       <SafeAreaView edges={['top']} style={styles.safeArea}>
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          <ResponsiveWrapper maxWidth={isTablet ? 900 : 600} style={styles.content}>
+          <ResponsiveWrapper maxWidth={isDesktop ? 1100 : isTablet ? 900 : 600} style={styles.content}>
             {/* Top bar */}
+            {Platform.OS === 'web' && isDesktop ? null : (
             <View style={styles.topBar}>
               <Pressable
                 onPress={() => setSideMenuOpen(true)}
@@ -142,6 +143,7 @@ export default function HomeScreen() {
                 <View style={[styles.notificationBadge, { backgroundColor: theme.primary }]} />
               </Pressable>
             </View>
+            )}
 
             <View style={styles.header}>
               <View style={styles.avatarWrap}>

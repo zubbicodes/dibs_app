@@ -14,6 +14,7 @@ import { useViewportDimensions } from '@/hooks/use-viewport-dimensions';
 import { ResponsiveWrapper } from '@/components/responsive-wrapper';
 
 import { supabase } from '@/lib/supabase';
+import { downloadCsvInBrowser } from '@/lib/web-files';
 
 type LogItem = {
   id: string;
@@ -40,7 +41,7 @@ export default function LogsScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
   const insets = useSafeAreaInsets();
-  const { isMobile, isTablet } = useViewportDimensions();
+  const { isMobile, isTablet, isDesktop } = useViewportDimensions();
   const [search, setSearch] = useState('');
   const [logsList, setLogsList] = useState<LogItem[]>([]);
 
@@ -94,6 +95,21 @@ export default function LogsScreen() {
       
       const csvData = header + rows;
       const fileName = `dibs_audit_logs_${Date.now()}.csv`;
+
+      if (Platform.OS === 'web') {
+        downloadCsvInBrowser(csvData, fileName);
+        const { data: { user } } = await supabase.auth.getUser();
+        await supabase.from('logs').insert({
+          user_id: user?.id,
+          name: user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'System',
+          details: 'Exported audit logs archive',
+          device: Platform.OS,
+          status: 'verified',
+          type: 'success',
+        });
+        return;
+      }
+
       const fileUri = `${FileSystem.documentDirectory}${fileName}`;
       
       await FileSystem.writeAsStringAsync(fileUri, csvData, { encoding: FileSystem.EncodingType.UTF8 });
@@ -144,7 +160,7 @@ export default function LogsScreen() {
   return (
     <ThemedView style={styles.screen}>
       <SafeAreaView edges={['top']} style={styles.safeArea}>
-        <ResponsiveWrapper maxWidth={isTablet ? 800 : 600} style={styles.content}>
+        <ResponsiveWrapper maxWidth={isDesktop ? 1100 : isTablet ? 800 : 600} style={styles.content}>
           <View style={styles.header}>
             <View style={[styles.headerIcon, { backgroundColor: theme.cardTint }]}>
               <MaterialIcons name="access-time" size={isMobile ? 24 : 32} color={theme.accent} />

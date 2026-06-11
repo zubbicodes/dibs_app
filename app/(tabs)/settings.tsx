@@ -2,7 +2,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -37,7 +37,7 @@ const SettingsScreen = () => {
   const { user, signOut } = useAuth();
   const { isVaultVerified } = useDemoSession();
   const insets = useSafeAreaInsets();
-  const { isMobile, isTablet } = useViewportDimensions();
+  const { isMobile, isTablet, isDesktop } = useViewportDimensions();
 
   const [darkMode, setDarkMode] = useState(colorScheme === 'dark');
   const [offlineAccess, setOfflineAccess] = useState(true);
@@ -46,11 +46,9 @@ const SettingsScreen = () => {
   const { watermarkEnabled, setWatermarkEnabled } = useWatermark();
   const [screenshotModalVisible, setScreenshotModalVisible] = useState(false);
   const [screenshotCountdown, setScreenshotCountdown] = useState(3);
-  const [screenshotCountingDown, setScreenshotCountingDown] = useState(false);
   const [pendingScreenshotDisable, setPendingScreenshotDisable] = useState(false);
   const [watermarkModalVisible, setWatermarkModalVisible] = useState(false);
   const [watermarkCountdown, setWatermarkCountdown] = useState(3);
-  const [watermarkCountingDown, setWatermarkCountingDown] = useState(false);
   const [pendingWatermarkDisable, setPendingWatermarkDisable] = useState(false);
   const [resetModalVisible, setResetModalVisible] = useState(false);
   const [resetting, setResetting] = useState(false);
@@ -137,18 +135,20 @@ const SettingsScreen = () => {
   };
 
   const handleScreenshotToggle = async (value: boolean) => {
+    if (Platform.OS === 'web') {
+      Alert.alert('Mobile only', 'Browsers cannot reliably block screenshots or screen recordings.');
+      return;
+    }
     if (value === screenshotProtectionEnabled) return;
     if (value) {
       await setScreenshotProtectionEnabled(true);
     } else {
       setScreenshotModalVisible(true);
       setScreenshotCountdown(3);
-      setScreenshotCountingDown(true);
       const interval = setInterval(() => {
         setScreenshotCountdown((prev) => {
           if (prev <= 1) {
             clearInterval(interval);
-            setScreenshotCountingDown(false);
             return 0;
           }
           return prev - 1;
@@ -170,12 +170,10 @@ const SettingsScreen = () => {
     } else {
       setWatermarkModalVisible(true);
       setWatermarkCountdown(3);
-      setWatermarkCountingDown(true);
       const interval = setInterval(() => {
         setWatermarkCountdown((prev) => {
           if (prev <= 1) {
             clearInterval(interval);
-            setWatermarkCountingDown(false);
             return 0;
           }
           return prev - 1;
@@ -203,7 +201,7 @@ const SettingsScreen = () => {
   return (
     <ThemedView style={styles.screen}>
       <SafeAreaView edges={['top']} style={styles.safeArea}>
-        <ResponsiveWrapper maxWidth={isTablet ? 800 : 700} style={styles.wrapper}>
+        <ResponsiveWrapper maxWidth={isDesktop ? 980 : isTablet ? 800 : 700} style={styles.wrapper}>
           {/* Header */}
           <View style={styles.header}>
             <View style={[styles.headerIcon, { backgroundColor: cardBg }]}>
@@ -329,10 +327,16 @@ const SettingsScreen = () => {
                   <Switch
                     value={screenshotProtectionEnabled}
                     onValueChange={handleScreenshotToggle}
+                    disabled={Platform.OS === 'web'}
                     trackColor={{ false: theme.border, true: toggleTrackOn }}
                     thumbColor="#D9D9D9"
                   />
                 </View>
+                {Platform.OS === 'web' ? (
+                  <ThemedText style={[styles.webOnlyNote, { color: theme.mutedText }]}>
+                    Screenshot blocking is enforced by the mobile operating system and is unavailable in browsers.
+                  </ThemedText>
+                ) : null}
                 <View style={[styles.divider, { backgroundColor: dividerColor }]} />
                 <View style={styles.row}>
                   <LinearGradient colors={['#8B5CF6', '#7C3AED']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.iconCircle}>
@@ -678,6 +682,12 @@ const styles = StyleSheet.create({
     minWidth: 0,
     fontFamily: FontFamilies.regular,
     lineHeight: 19,
+  },
+  webOnlyNote: {
+    fontSize: 12,
+    lineHeight: 18,
+    paddingBottom: 14,
+    paddingLeft: 46,
   },
   logoutButton: {
     marginTop: 32,

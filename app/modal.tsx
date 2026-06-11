@@ -22,6 +22,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  TextInput,
   View,
 } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
@@ -71,18 +72,13 @@ export default function IdentityVerificationModal() {
 
   if (Platform.OS === 'web') {
     return (
-      <VerificationShell
-        cardWidth={cardWidth}
-        faceSize={faceSize}
+      <WebVerificationModal
+        router={router}
+        verifyVault={verifyVault}
+        user={user}
         theme={theme}
         colorScheme={colorScheme}
-        statusMessage="Face unlock is only available on the mobile app."
-        statusColor={theme.mutedText}
-        statusIcon="phone-android"
-        instruction="Open DIBS on your phone to unlock the vault."
-        content={<View style={{ flex: 1 }} />}
-        onUsePin={async () => {}}
-        onCancel={() => router.back()}
+        cardWidth={cardWidth}
       />
     );
   }
@@ -96,6 +92,131 @@ export default function IdentityVerificationModal() {
       colorScheme={colorScheme}
       cardWidth={cardWidth}
       faceSize={faceSize}
+    />
+  );
+}
+
+function WebVerificationModal({
+  router,
+  verifyVault,
+  user,
+  theme,
+  colorScheme,
+  cardWidth,
+}: {
+  router: ReturnType<typeof useRouter>;
+  verifyVault: () => void;
+  user: ReturnType<typeof useAuth>['user'];
+  theme: typeof Colors.light;
+  colorScheme: 'light' | 'dark';
+  cardWidth: number;
+}) {
+  const [password, setPassword] = useState('');
+  const [status, setStatus] = useState<AuthStatus>('preparing');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const runWebVerification = async () => {
+    if (!user?.email || !user?.id) {
+      setStatus('failed');
+      setErrorMsg('Sign in again before unlocking the vault.');
+      return;
+    }
+    if (!password) {
+      setStatus('failed');
+      setErrorMsg('Enter your password to unlock the vault.');
+      return;
+    }
+
+    setStatus('matching');
+    setErrorMsg(null);
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email: user.email,
+      password,
+    });
+
+    const name = user.user_metadata?.full_name || user.email.split('@')[0] || 'User';
+
+    if (error) {
+      setStatus('failed');
+      setErrorMsg('Password verification failed.');
+      await supabase.from('logs').insert({
+        user_id: user.id,
+        name,
+        details: `Web vault password verification failed: ${error.message}`,
+        device: Platform.OS,
+        status: 'blocked',
+        type: 'danger',
+      });
+      return;
+    }
+
+    setStatus('success');
+    verifyVault();
+    await supabase.from('logs').insert({
+      user_id: user.id,
+      name,
+      details: 'Web vault password verification successful',
+      device: Platform.OS,
+      status: 'verified',
+      type: 'success',
+    });
+    setTimeout(() => router.back(), 350);
+  };
+
+  const statusMessage =
+    status === 'success'
+      ? 'Verified Successfully'
+      : status === 'failed'
+        ? errorMsg || 'Verification Failed'
+        : status === 'matching'
+          ? 'Verifying...'
+          : 'Password verification required';
+
+  const statusColor =
+    status === 'success'
+      ? theme.success
+      : status === 'failed'
+        ? theme.danger
+        : theme.accent;
+
+  return (
+    <VerificationShell
+      cardWidth={cardWidth}
+      faceSize={0}
+      theme={theme}
+      colorScheme={colorScheme}
+      statusMessage={statusMessage}
+      statusColor={statusColor}
+      statusIcon={status === 'success' ? 'check-circle' : status === 'failed' ? 'error-outline' : 'lock'}
+      instruction="For web access, confirm your account password. Face matching remains available in the mobile app."
+      content={
+        <View style={styles.webPasswordWrap}>
+          <TextInput
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            placeholder="Account password"
+            placeholderTextColor={theme.mutedText}
+            autoCapitalize="none"
+            autoComplete="current-password"
+            style={[
+              styles.webPasswordInput,
+              {
+                color: theme.text,
+                backgroundColor: theme.inputBg,
+                borderColor: theme.inputBorder,
+              },
+            ]}
+            onSubmitEditing={runWebVerification}
+          />
+        </View>
+      }
+      onUsePin={runWebVerification}
+      onCancel={() => router.back()}
+      primaryLabel={status === 'matching' ? 'Verifying...' : 'Unlock Vault'}
+      hideFaceFrame
+      primaryDisabled={status === 'matching'}
     />
   );
 }
@@ -400,6 +521,9 @@ function VerificationShell({
   content,
   onUsePin,
   onCancel,
+  primaryLabel = 'Use Pin Instead',
+  hideFaceFrame,
+  primaryDisabled,
 }: {
   cardWidth: number;
   faceSize: number;
@@ -412,6 +536,9 @@ function VerificationShell({
   content: React.ReactNode;
   onUsePin: () => void | Promise<void>;
   onCancel: () => void;
+  primaryLabel?: string;
+  hideFaceFrame?: boolean;
+  primaryDisabled?: boolean;
 }) {
   const cardBg = colorScheme === 'dark' ? '#11141C' : theme.surface;
 
@@ -461,13 +588,17 @@ function VerificationShell({
               </ThemedText>
             </View>
 
-            <View
-              style={[
-                styles.faceFrame,
-                { width: faceSize, height: faceSize, borderColor: theme.accent, borderRadius: 18 },
-              ]}>
-              {content}
-            </View>
+            {hideFaceFrame ? (
+              content
+            ) : (
+              <View
+                style={[
+                  styles.faceFrame,
+                  { width: faceSize, height: faceSize, borderColor: theme.accent, borderRadius: 18 },
+                ]}>
+                {content}
+              </View>
+            )}
 
             <View
               style={[
@@ -485,11 +616,12 @@ function VerificationShell({
 
             <Pressable
               onPress={onUsePin}
+              disabled={primaryDisabled}
               style={({ pressed }) => [
                 styles.primaryButton,
-                { backgroundColor: theme.primary, opacity: pressed ? 0.9 : 1 },
+                { backgroundColor: theme.primary, opacity: pressed || primaryDisabled ? 0.75 : 1 },
               ]}>
-              <ThemedText style={styles.primaryButtonText}>Use Pin Instead</ThemedText>
+              <ThemedText style={styles.primaryButtonText}>{primaryLabel}</ThemedText>
             </Pressable>
 
             <Pressable
@@ -576,6 +708,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
     marginBottom: 20,
+  },
+  webPasswordWrap: {
+    alignSelf: 'stretch',
+    marginBottom: 20,
+  },
+  webPasswordInput: {
+    height: 50,
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    fontSize: 14,
+    fontFamily: FontFamilies.regular,
+    outlineStyle: 'none' as never,
   },
   placeholder: {
     alignItems: 'center',

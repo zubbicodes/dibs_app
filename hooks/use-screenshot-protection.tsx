@@ -1,6 +1,7 @@
 import { createContext, useContext, useMemo, useState, useEffect, type ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ScreenCapture from 'expo-screen-capture';
+import { Platform } from 'react-native';
 
 const STORAGE_KEY = '@dibs_screenshot_protection';
 
@@ -26,6 +27,7 @@ export function ScreenshotProtectionProvider({ children }: { children: ReactNode
 
   useEffect(() => {
     const updateScreenCapture = async () => {
+      if (Platform.OS === 'web') return;
       if (screenshotProtectionEnabled) {
         await ScreenCapture.preventScreenCaptureAsync();
       } else {

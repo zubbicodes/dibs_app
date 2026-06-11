@@ -47,6 +47,7 @@ import { usePhoneDetection } from '@/hooks/use-phone-detector';
 import { logPhoneDetectionEvent } from '@/lib/phone-detection-logger';
 import { MODEL_INPUT_SIZE, emptyPhoneDetectionResult, parsePhoneDetectionOutputs } from '@/lib/phone-detector';
 import { supabase } from '@/lib/supabase';
+import { downloadUrlInBrowser, getFilenameFromUrl } from '@/lib/web-files';
 
 type Filter = 'all' | 'photos' | 'videos';
 type VaultItem = { id: string; uri: string; type: 'image' | 'video' };
@@ -96,7 +97,7 @@ export default function VaultScreen() {
   const padding = 16;
   const gap = 10;
   const cols = isMobile ? 3 : isTablet ? 4 : 5;
-  const containerWidth = isMobile ? width : Math.min(width, 1000);
+  const containerWidth = isMobile ? width : Math.min(width, 1200);
   const tileWidth = (containerWidth - padding * 2 - gap * (cols - 1)) / cols;
 
   const [items, setItems] = useState<VaultItem[]>([]);
@@ -289,6 +290,21 @@ export default function VaultScreen() {
     if (!actionItem) return;
     setBusy(true);
     try {
+      if (Platform.OS === 'web') {
+        const filename = getFilenameFromUrl(actionItem.uri, `dibs_media_${Date.now()}`);
+        await downloadUrlInBrowser(actionItem.uri, filename);
+        void supabase.from('logs').insert({
+          user_id: user?.id,
+          name: user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User',
+          details: 'Downloaded media',
+          device: Platform.OS,
+          status: 'verified',
+          type: 'success',
+        });
+        setActionItem(null);
+        return;
+      }
+
       const { status } = await MediaLibrary.requestPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('Permission needed', 'Please grant media library access to save files.');
@@ -331,6 +347,19 @@ export default function VaultScreen() {
     if (!actionItem) return;
     setBusy(true);
     try {
+      if (Platform.OS === 'web') {
+        if (typeof navigator !== 'undefined' && navigator.share) {
+          await navigator.share({
+            title: 'DIBS protected media',
+            url: actionItem.uri,
+          });
+          setActionItem(null);
+          return;
+        }
+        Alert.alert('Unavailable', 'Sharing is not available in this browser.');
+        return;
+      }
+
       const isAvailable = await Sharing.isAvailableAsync();
       if (!isAvailable) {
         Alert.alert('Unavailable', 'Sharing is not available on this device.');
@@ -475,7 +504,7 @@ export default function VaultScreen() {
           <View
             style={[
               styles.headerInner,
-              !isMobile && { maxWidth: 1000, alignSelf: 'center', width: '100%' },
+              !isMobile && { maxWidth: 1200, alignSelf: 'center', width: '100%' },
             ]}>
             <View style={styles.header}>
               <View style={[styles.headerIcon, { backgroundColor: theme.cardTint }]}>
