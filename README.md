@@ -120,6 +120,47 @@ Device/session reference - Verified vs Blocked attempts
 
 ------------------------------------------------------------------------
 
+## Docker Deployment (Web)
+
+The web version of DIBS can be deployed using Docker and Nginx.
+
+### Quick Start
+
+**Local Testing:**
+```bash
+docker-compose up --build
+```
+
+**Production Build:**
+```bash
+docker build -t dibs-app:latest .
+docker run -p 80:80 dibs-app:latest
+```
+
+### Deployment Files
+
+- **Dockerfile** - Multi-stage build with Node + Nginx
+- **nginx.conf** - Nginx configuration
+- **nginx-default.conf** - Virtual host setup
+- **.dockerignore** - Build optimization
+- **docker-compose.yml** - Local development
+
+### Deploy to Coolify
+
+See [COOLIFY_DEPLOYMENT.md](./COOLIFY_DEPLOYMENT.md) for detailed instructions.
+
+Quick steps:
+1. Push repository to GitHub
+2. In Coolify: New Project → Deploy from Git
+3. Select repository and branch
+4. Configure Dockerfile path: `./Dockerfile`
+5. Set exposed port to `80`
+6. Deploy!
+
+For complete deployment guide, see [DOCKER_DEPLOYMENT.md](./DOCKER_DEPLOYMENT.md)
+
+------------------------------------------------------------------------
+
 ## Delivery Timeline (6--8 Weeks)
 
   Week   Phase

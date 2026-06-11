@@ -1,0 +1,68 @@
+name: Build and Deploy to Docker
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: dibs-app:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: Test build (Run container health check)
+        run: |
+          docker build -t dibs-app:test .
+          docker run -d --name test-app -p 8080:80 dibs-app:test
+          sleep 5
+          curl -f http://localhost:8080/health || exit 1
+          docker stop test-app
+          docker rm test-app
+  
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Deploy to Coolify (Webhook Trigger)
+        run: |
+          if [ ! -z "${{ secrets.COOLIFY_WEBHOOK_URL }}" ]; then
+            curl -X POST \
+              -H "Content-Type: application/json" \
+              -d '{"ref":"${{ github.ref }}","sha":"${{ github.sha }}"}' \
+              "${{ secrets.COOLIFY_WEBHOOK_URL }}"
+          else
+            echo "Coolify webhook URL not configured. Skipping deployment."
+          fi
+
+      # Alternative: Using Coolify CLI (if you prefer)
+      # - name: Deploy using Coolify API
+      #   env:
+      #     COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
+      #     COOLIFY_SERVER_ID: ${{ secrets.COOLIFY_SERVER_ID }}
+      #   run: |
+      #     curl -X POST https://coolify.io/api/v1/applications/${{ secrets.COOLIFY_APP_ID }}/deploy \
+      #       -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
+      #       -H "Content-Type: application/json"

@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  dibs-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dibs-app
+    ports:
+      - "80:80"
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    networks:
+      - dibs-network
+
+networks:
+  dibs-network:
+    driver: bridge
