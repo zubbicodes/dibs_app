@@ -12,6 +12,16 @@
  * (expo-local-authentication) for users without a front camera or when
  * face recognition fails repeatedly.
  */
+import {
+  Camera,
+  runAtTargetFps,
+  useCameraDevice,
+  useCameraPermission,
+  useFaceDetector,
+  useFrameProcessor,
+  Worklets,
+  type Face,
+} from '@/lib/native-camera';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useRouter } from 'expo-router';
@@ -27,16 +37,6 @@ import {
 } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import {
-  Camera,
-  runAtTargetFps,
-  useCameraDevice,
-  useCameraPermission,
-  useFrameProcessor,
-  useFaceDetector,
-  type Face,
-  Worklets,
-} from '@/lib/native-camera';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -48,7 +48,6 @@ import { useFaceModel } from '@/hooks/use-face-model';
 import { useViewportDimensions } from '@/hooks/use-viewport-dimensions';
 import {
   cosineSimilarity,
-  embedFaceFromPhoto,
   getEnrollment,
   MATCH_THRESHOLD,
   nextLivenessState,
@@ -79,6 +78,7 @@ export default function IdentityVerificationModal() {
         theme={theme}
         colorScheme={colorScheme}
         cardWidth={cardWidth}
+        faceSize={faceSize}
       />
     );
   }
@@ -103,6 +103,7 @@ function WebVerificationModal({
   theme,
   colorScheme,
   cardWidth,
+  faceSize,
 }: {
   router: ReturnType<typeof useRouter>;
   verifyVault: () => void;
@@ -110,12 +111,169 @@ function WebVerificationModal({
   theme: typeof Colors.light;
   colorScheme: 'light' | 'dark';
   cardWidth: number;
+  faceSize: number;
 }) {
-  const [password, setPassword] = useState('');
   const [status, setStatus] = useState<AuthStatus>('preparing');
+  const [enrollment, setEnrollment] = useState<number[] | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [usePassword, setUsePassword] = useState(false);
+  const [password, setPassword] = useState('');
+  const [modelsLoaded, setModelsLoaded] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const isVerifyingRef = useRef(false);
 
-  const runWebVerification = async () => {
+  // Load face-api.js models from CDN
+  useEffect(() => {
+    const loadModels = async () => {
+      try {
+        const faceapi = await import('face-api.js');
+        const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/model';
+        await Promise.all([
+          faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+          faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+          faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+        ]);
+        setModelsLoaded(true);
+      } catch (err) {
+        console.error('Failed to load face-api.js models:', err);
+        setUsePassword(true);
+        setStatus('failed');
+        setErrorMsg('Failed to load face recognition models. Please use password.');
+      }
+    };
+    loadModels();
+  }, []);
+
+  // Load enrollment
+  useEffect(() => {
+    if (!user?.id) return;
+    getEnrollment(user.id)
+      .then((e) => {
+        if (!e) {
+          setUsePassword(true);
+          setStatus('failed');
+          setErrorMsg('No face enrollment found. Please use password.');
+        } else {
+          setEnrollment(e);
+          setStatus('scanning');
+        }
+      })
+      .catch((err) => {
+        setUsePassword(true);
+        setStatus('failed');
+        setErrorMsg(err?.message ?? 'Failed to load enrollment');
+      });
+  }, [user?.id]);
+
+  // Start camera
+  const startCamera = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user' },
+      });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+        setCameraActive(true);
+      }
+    } catch (err) {
+      console.error('Failed to start camera:', err);
+      setUsePassword(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (status === 'scanning' && modelsLoaded && !cameraActive) {
+      startCamera();
+    }
+  }, [status, modelsLoaded, cameraActive, startCamera]);
+
+  // Run face detection and recognition
+  useEffect(() => {
+    if (!cameraActive || !modelsLoaded || !enrollment || !videoRef.current || !canvasRef.current) {
+      return;
+    }
+
+    let animationId: number;
+    let lastDetectionTime = 0;
+
+    const detectFace = async () => {
+      if (!videoRef.current || videoRef.current.readyState < 2) {
+        animationId = requestAnimationFrame(detectFace);
+        return;
+      }
+
+      const now = Date.now();
+      // Only run detection every 500ms to save resources
+      if (now - lastDetectionTime < 500) {
+        animationId = requestAnimationFrame(detectFace);
+        return;
+      }
+      lastDetectionTime = now;
+
+      try {
+        const faceapi = await import('face-api.js');
+        const detection = await faceapi.detectSingleFace(
+          videoRef.current,
+          new faceapi.TinyFaceDetectorOptions()
+        ).withFaceLandmarks().withFaceDescriptor();
+
+        if (detection && !isVerifyingRef.current) {
+          isVerifyingRef.current = true;
+          setStatus('matching');
+
+          const liveEmbedding = Array.from(detection.descriptor);
+          const sim = cosineSimilarity(liveEmbedding, enrollment);
+          const ok = sim >= MATCH_THRESHOLD;
+
+          const name =
+            user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
+
+          if (ok) {
+            setStatus('success');
+            verifyVault();
+            await supabase.from('logs').insert({
+              user_id: user?.id || '',
+              name,
+              details: `Face match verified (similarity ${sim.toFixed(3)})`,
+              device: Platform.OS,
+              status: 'verified',
+              type: 'success',
+            });
+            setTimeout(() => router.back(), 500);
+          } else {
+            setStatus('failed');
+            setErrorMsg(`Face did not match (similarity ${sim.toFixed(3)})`);
+            await supabase.from('logs').insert({
+              user_id: user?.id || '',
+              name,
+              details: `Face match failed (similarity ${sim.toFixed(3)})`,
+              device: Platform.OS,
+              status: 'blocked',
+              type: 'danger',
+            });
+            isVerifyingRef.current = false;
+          }
+        }
+      } catch (err) {
+        console.error('Face detection error:', err);
+      }
+
+      animationId = requestAnimationFrame(detectFace);
+    };
+
+    // Add a small delay before starting detection
+    const timeoutId = setTimeout(detectFace, 1000);
+
+    return () => {
+      clearTimeout(timeoutId);
+      if (animationId) cancelAnimationFrame(animationId);
+    };
+  }, [cameraActive, modelsLoaded, enrollment, user, verifyVault, router]);
+
+  const runWebPasswordVerification = async () => {
     if (!user?.email || !user?.id) {
       setStatus('failed');
       setErrorMsg('Sign in again before unlocking the vault.');
@@ -170,8 +328,10 @@ function WebVerificationModal({
       : status === 'failed'
         ? errorMsg || 'Verification Failed'
         : status === 'matching'
-          ? 'Verifying...'
-          : 'Password verification required';
+          ? 'Matching...'
+          : !modelsLoaded
+            ? 'Loading face recognition models...'
+            : 'Look at the camera';
 
   const statusColor =
     status === 'success'
@@ -180,43 +340,78 @@ function WebVerificationModal({
         ? theme.danger
         : theme.accent;
 
+  const statusIcon: keyof typeof MaterialIcons.glyphMap =
+    status === 'success'
+      ? 'check-circle'
+      : status === 'failed'
+        ? 'error-outline'
+        : 'videocam';
+
+  const instruction =
+    status === 'failed'
+      ? 'Try again or use password.'
+      : 'Remove hats or glasses, keep a neutral expression and stay still.';
+
+  const content = (
+    <View style={{ width: faceSize, height: faceSize, overflow: 'hidden', borderRadius: 18 }}>
+      <video
+        ref={videoRef}
+        style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)' }}
+        autoPlay
+        playsInline
+        muted
+      />
+      <canvas ref={canvasRef} style={{ display: 'none' }} />
+    </View>
+  );
+
+  const handleUsePassword = usePassword ? runWebPasswordVerification : () => setUsePassword(true);
+  const primaryLabel = usePassword
+    ? status === 'matching' ? 'Verifying...' : 'Unlock Vault'
+    : 'Use Password Instead';
+  const primaryDisabled = status === 'matching';
+
   return (
     <VerificationShell
       cardWidth={cardWidth}
-      faceSize={0}
+      faceSize={usePassword ? 0 : faceSize}
       theme={theme}
       colorScheme={colorScheme}
       statusMessage={statusMessage}
       statusColor={statusColor}
-      statusIcon={status === 'success' ? 'check-circle' : status === 'failed' ? 'error-outline' : 'lock'}
-      instruction="For web access, confirm your account password. Face matching remains available in the mobile app."
+      statusIcon={statusIcon}
+      instruction={instruction}
       content={
-        <View style={styles.webPasswordWrap}>
-          <TextInput
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            placeholder="Account password"
-            placeholderTextColor={theme.mutedText}
-            autoCapitalize="none"
-            autoComplete="current-password"
-            style={[
-              styles.webPasswordInput,
-              {
-                color: theme.text,
-                backgroundColor: theme.inputBg,
-                borderColor: theme.inputBorder,
-              },
-            ]}
-            onSubmitEditing={runWebVerification}
-          />
-        </View>
+        usePassword ? (
+          <View style={styles.webPasswordWrap}>
+            <TextInput
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              placeholder="Account password"
+              placeholderTextColor={theme.mutedText}
+              autoCapitalize="none"
+              autoComplete="current-password"
+              style={[
+                styles.webPasswordInput,
+                {
+                  color: theme.text,
+                  backgroundColor: theme.inputBg,
+                  borderColor: theme.inputBorder,
+                },
+              ]}
+              onSubmitEditing={runWebPasswordVerification}
+            />
+          </View>
+        ) : (
+          content
+        )
       }
-      onUsePin={runWebVerification}
+      onUsePin={handleUsePassword}
       onCancel={() => router.back()}
-      primaryLabel={status === 'matching' ? 'Verifying...' : 'Unlock Vault'}
-      hideFaceFrame
-      primaryDisabled={status === 'matching'}
+      primaryLabel={primaryLabel}
+      hideFaceFrame={usePassword}
+      primaryDisabled={primaryDisabled}
     />
   );
 }
@@ -315,6 +510,7 @@ function NativeVerificationModal({
         height: bounds.height * scaleY,
       };
 
+      const { embedFaceFromPhoto } = await import('@/lib/face-recognition');
       const live = await embedFaceFromPhoto(model, photoUri, scaled, {
         photoWidth: photo.width,
         photoHeight: photo.height,
@@ -446,7 +642,7 @@ function NativeVerificationModal({
       : status === 'failed'
         ? errorMsg || 'Verification Failed'
         : status === 'matching'
-          ? 'Matching…'
+          ? 'Matching...'
           : liveness === 'look-straight'
             ? 'Look straight at the camera'
             : liveness === 'eyes-closed'
@@ -454,8 +650,8 @@ function NativeVerificationModal({
               : liveness === 'eyes-open-again'
                 ? 'Open your eyes'
                 : liveness === 'passed'
-                  ? 'Capturing…'
-                  : 'Preparing…';
+                  ? 'Capturing...'
+                  : 'Preparing...';
 
   const statusColor =
     status === 'success'

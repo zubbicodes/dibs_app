@@ -2,11 +2,11 @@
  * Core face-recognition pipeline for DIBS.
  *
  * Model: MobileFaceNet (112x112 RGB input, 192-d L2-normalized embedding output).
- * Place the `.tflite` file at `assets/models/mobilefacenet.tflite` — the
- * `react-native-fast-tflite` config plugin bundles it automatically.
+ * Place the ".tflite" file at "assets/models/mobilefacenet.tflite" — the
+ * "react-native-fast-tflite" config plugin bundles it automatically.
  *
  * The pipeline:
- *   photo URI  →  crop-to-face (expo-image-manipulator, 112x112)
+ *   photo URI  →  crop to face (expo-image-manipulator, 112x112)
  *              →  JPEG decode (jpeg-js)
  *              →  normalize to Float32 in [-1, 1]
  *              →  TFLite inference  →  192-d embedding
@@ -17,11 +17,11 @@
  */
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import jpeg from 'jpeg-js';
-import type { TensorflowModel } from 'react-native-fast-tflite';
+import { Platform } from 'react-native';
 
 import { supabase } from './supabase';
 
-export const EMBEDDING_SIZE = 192;
+export const EMBEDDING_SIZE = 128; // face-api.js uses 128-dimensional embeddings
 export const MODEL_INPUT_SIZE = 112;
 export const MATCH_THRESHOLD = 0.7;
 
@@ -47,6 +47,10 @@ export async function cropFaceTo112(
   bounds: FaceBounds,
   ctx: CropContext
 ): Promise<string> {
+  if (Platform.OS === 'web') {
+    // Web implementation using canvas
+    return cropFaceTo112Web(photoUri, bounds, ctx);
+  }
   const padX = bounds.width * 0.2;
   const padY = bounds.height * 0.2;
   const cropX = Math.max(0, Math.floor(bounds.x - padX));
@@ -74,11 +78,61 @@ export async function cropFaceTo112(
   return result.base64;
 }
 
+/** Web version of cropFaceTo112 using canvas */
+async function cropFaceTo112Web(
+  photoUri: string,
+  bounds: FaceBounds,
+  ctx: CropContext
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const canvasCtx = canvas.getContext('2d');
+      if (!canvasCtx) {
+        reject(new Error('Could not get canvas context'));
+        return;
+      }
+
+      const padX = bounds.width * 0.2;
+      const padY = bounds.height * 0.2;
+      const cropX = Math.max(0, Math.floor(bounds.x - padX));
+      const cropY = Math.max(0, Math.floor(bounds.y - padY));
+      const cropW = Math.min(
+        ctx.photoWidth - cropX,
+        Math.ceil(bounds.width + 2 * padX)
+      );
+      const cropH = Math.min(
+        ctx.photoHeight - cropY,
+        Math.ceil(bounds.height + 2 * padY)
+      );
+
+      canvas.width = MODEL_INPUT_SIZE;
+      canvas.height = MODEL_INPUT_SIZE;
+
+      // Draw cropped and resized image
+      canvasCtx.drawImage(
+        img,
+        cropX, cropY, cropW, cropH,
+        0, 0, MODEL_INPUT_SIZE, MODEL_INPUT_SIZE
+      );
+
+      resolve(canvas.toDataURL('image/jpeg', 1.0).split(',')[1]);
+    };
+    img.onerror = reject;
+    img.src = photoUri;
+  });
+}
+
 /**
  * Resize the whole photo to 112×112 (used when the caller has already
  * framed the face within a guide). Base64 JPEG out.
  */
 export async function resizePhotoTo112(photoUri: string): Promise<string> {
+  if (Platform.OS === 'web') {
+    return resizePhotoTo112Web(photoUri);
+  }
   const result = await manipulateAsync(
     photoUri,
     [{ resize: { width: MODEL_INPUT_SIZE, height: MODEL_INPUT_SIZE } }],
@@ -88,6 +142,27 @@ export async function resizePhotoTo112(photoUri: string): Promise<string> {
     throw new Error('Failed to encode resized photo as base64 JPEG');
   }
   return result.base64;
+}
+
+async function resizePhotoTo112Web(photoUri: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const canvasCtx = canvas.getContext('2d');
+      if (!canvasCtx) {
+        reject(new Error('Could not get canvas context'));
+        return;
+      }
+      canvas.width = MODEL_INPUT_SIZE;
+      canvas.height = MODEL_INPUT_SIZE;
+      canvasCtx.drawImage(img, 0, 0, MODEL_INPUT_SIZE, MODEL_INPUT_SIZE);
+      resolve(canvas.toDataURL('image/jpeg', 1.0).split(',')[1]);
+    };
+    img.onerror = reject;
+    img.src = photoUri;
+  });
 }
 
 /**
@@ -178,7 +253,7 @@ export function averageEmbeddings(embeddings: number[][]): number[] {
  * Run the TFLite model on a Float32 tensor and return an L2-normalized embedding.
  * Caller owns model loading (via `useTensorflowModel` hook from `react-native-fast-tflite`).
  */
-export function runFaceModel(model: TensorflowModel, tensor: Float32Array): number[] {
+export function runFaceModel(model: any, tensor: Float32Array): number[] {
   const outputs = model.runSync([tensor.buffer as ArrayBuffer]);
   const raw = new Float32Array(outputs[0]);
   return Array.from(l2Normalize(raw));
@@ -188,7 +263,7 @@ export function runFaceModel(model: TensorflowModel, tensor: Float32Array): numb
  * One-shot: given a photo and the detected face bounds, produce an embedding.
  */
 export async function embedFaceFromPhoto(
-  model: TensorflowModel,
+  model: any,
   photoUri: string,
   bounds: FaceBounds,
   ctx: CropContext
