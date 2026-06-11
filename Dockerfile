@@ -69,13 +69,10 @@ COPY nginx-default.conf /etc/nginx/conf.d/default.conf
 # Copy consolidated web build from builder stage
 COPY --from=builder /app/web-dist /usr/share/nginx/html/ 2>/dev/null || true
 
-# Verify files were copied or create fallback
-RUN echo "=== Checking Nginx HTML directory ===" && \
-    ls -la /usr/share/nginx/html/ && \
+# Create diagnostic page and verify setup
+RUN mkdir -p /usr/share/nginx/html && \
     if [ ! -f "/usr/share/nginx/html/index.html" ]; then \
-      echo "WARNING: No index.html found. Creating diagnostic fallback page." && \
-      mkdir -p /usr/share/nginx/html && \
-      cat > /usr/share/nginx/html/index.html << 'EOF'
+      cat > /usr/share/nginx/html/index.html << 'HTMLEOF'
 <!DOCTYPE html>
 <html>
 <head>
@@ -109,17 +106,17 @@ RUN echo "=== Checking Nginx HTML directory ===" && \
   <h2>Next Steps:</h2>
   <ol>
     <li>Check the Docker build logs in Coolify for errors</li>
-    <li>Look for the diagnostic output showing build directories</li>
-    <li>Verify <code>npm run web:build</code> creates output locally</li>
+    <li>Look for diagnostic output showing build directories</li>
+    <li>Verify npm run web:build creates output locally</li>
   </ol>
 
-  <p><small>Container timestamp: $(date)</small></p>
+  <p><small>If you see this page, the build output is missing.</small></p>
 </body>
 </html>
-EOF
+HTMLEOF
     fi && \
-    echo "=== Final HTML directory contents ===" && \
-    ls -la /usr/share/nginx/html/
+    echo "=== Nginx HTML directory contents ===" && \
+    ls -la /usr/share/nginx/html/ | head -20
 
 # Create required nginx directories with proper permissions
 RUN mkdir -p /var/cache/nginx && \
