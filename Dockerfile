@@ -35,27 +35,15 @@ RUN echo "=== Root directory after build ===" && \
 RUN echo "=== Searching for index.html ===" && \
     find . -maxdepth 4 -name "index.html" -type f 2>/dev/null | head -20 || echo "No index.html found"
 
-# Find and verify build output - consolidate to /app/web-dist
-RUN mkdir -p /app/web-dist && \
-    found=0 && \
-    for dir in dist .expo/web web-build build static out; do \
-      if [ -d "$dir" ] && [ -f "$dir/index.html" ]; then \
-        echo "✓ Found build output in: $dir"; \
-        cp -r "$dir"/* /app/web-dist/ 2>/dev/null || true; \
-        found=1; \
-        break; \
-      fi; \
-    done && \
-    if [ $found -eq 0 ]; then \
-      echo "ERROR: No build output found in any expected directory"; \
-      echo "=== Current directory contents ===" && \
-      ls -la . | head -40 && \
-      echo "=== Searching all directories ===" && \
-      find . -type d -maxdepth 3 2>/dev/null | head -20 && \
+# Copy dist directory (Expo web output)
+RUN if [ ! -d "dist" ] || [ ! -f "dist/index.html" ]; then \
+      echo "ERROR: dist directory or index.html not found!"; \
+      echo "=== Current directory contents ===" && ls -la; \
       exit 1; \
     fi && \
-    echo "=== web-dist contents ===" && \
-    ls -la /app/web-dist/ | head -30
+    mkdir -p /app/web-dist && \
+    cp -r dist/* /app/web-dist/ && \
+    echo "=== web-dist contents ===" && ls -la /app/web-dist/
 
 # Stage 2: Runtime stage - lightweight Nginx only
 FROM nginx:alpine
