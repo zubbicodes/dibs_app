@@ -54,8 +54,8 @@ WORKDIR /app
 COPY nginx.conf /etc/nginx/nginx.conf
 COPY nginx-default.conf /etc/nginx/conf.d/default.conf
 
-# Copy consolidated web build from builder stage
-COPY --from=builder /app/web-dist /usr/share/nginx/html/ 2>/dev/null || true
+# Copy consolidated web build from builder stage (trailing slash copies contents of web-dist into html dir)
+COPY --from=builder /app/web-dist/ /usr/share/nginx/html/
 
 # Create diagnostic page and verify setup
 RUN mkdir -p /usr/share/nginx/html && \
