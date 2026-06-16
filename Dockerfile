@@ -48,8 +48,6 @@ RUN if [ ! -d "dist" ] || [ ! -f "dist/index.html" ]; then \
 # Stage 2: Runtime stage - lightweight Nginx only
 FROM nginx:alpine
 
-WORKDIR /app
-
 # Copy nginx configuration FIRST
 COPY nginx.conf /etc/nginx/nginx.conf
 COPY nginx-default.conf /etc/nginx/conf.d/default.conf
@@ -57,59 +55,13 @@ COPY nginx-default.conf /etc/nginx/conf.d/default.conf
 # Copy consolidated web build from builder stage (trailing slash copies contents of web-dist into html dir)
 COPY --from=builder /app/web-dist/ /usr/share/nginx/html/
 
-# Create diagnostic page and verify setup
-RUN mkdir -p /usr/share/nginx/html && \
-    if [ ! -f "/usr/share/nginx/html/index.html" ]; then \
-      cat > /usr/share/nginx/html/index.html << 'HTMLEOF'
-<!DOCTYPE html>
-<html>
-<head>
-  <title>DIBS - Build Diagnostic</title>
-  <style>
-    body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
-    .error { color: #d32f2f; background: #ffebee; padding: 15px; border-radius: 4px; margin: 20px 0; }
-    .info { color: #1976d2; background: #e3f2fd; padding: 15px; border-radius: 4px; margin: 20px 0; }
-    code { background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }
-    h1 { color: #333; }
-  </style>
-</head>
-<body>
-  <h1>🐳 DIBS Application - Docker Build</h1>
-  
-  <div class="error">
-    <strong>⚠️ Build Issue Detected</strong>
-    <p>No application files were found in the build output.</p>
-    <p>The Expo web build may have failed or produced no output.</p>
-  </div>
-
-  <div class="info">
-    <strong>✓ Good News:</strong>
-    <ul>
-      <li>Nginx is running correctly</li>
-      <li>Container is operational</li>
-      <li>Issue is with the build process, not deployment</li>
-    </ul>
-  </div>
-
-  <h2>Next Steps:</h2>
-  <ol>
-    <li>Check the Docker build logs in Coolify for errors</li>
-    <li>Look for diagnostic output showing build directories</li>
-    <li>Verify npm run web:build creates output locally</li>
-  </ol>
-
-  <p><small>If you see this page, the build output is missing.</small></p>
-</body>
-</html>
-HTMLEOF
+# Verify index.html exists
+RUN if [ ! -f "/usr/share/nginx/html/index.html" ]; then \
+      echo "ERROR: index.html not found in /usr/share/nginx/html/"; \
+      exit 1; \
     fi && \
     echo "=== Nginx HTML directory contents ===" && \
-    ls -la /usr/share/nginx/html/ | head -20
-
-# Create required nginx directories with proper permissions
-RUN mkdir -p /var/cache/nginx && \
-    touch /var/run/nginx.pid && \
-    chown -R nginx:nginx /var/cache/nginx /var/run/nginx.pid /var/log/nginx
+    ls -la /usr/share/nginx/html/
 
 # Expose port
 EXPOSE 80
