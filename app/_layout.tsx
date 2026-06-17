@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from '@/hooks/use-auth';
 import { ThemeModeProvider, useColorScheme } from '@/hooks/use-color-scheme';
 import { FaceModelProvider } from '@/hooks/use-face-model';
 import { PhoneDetectionProvider } from '@/hooks/use-phone-detector';
+import { usePushVerification } from '@/hooks/use-push-verification';
 import { ScreenshotProtectionProvider } from '@/hooks/use-screenshot-protection';
 import { WatermarkProvider } from '@/hooks/use-watermark';
 import {
@@ -68,6 +69,7 @@ function RootNavigator() {
   const colorScheme = useColorScheme() ?? 'light';
   const isWeb = Platform.OS === 'web';
   const { isLoading: isAuthLoading } = useAuth();
+  usePushVerification();
 
   // Keep the native splash visible until auth has resolved — prevents the
   // brief flash of (tabs) or another default route before the Stack settles
@@ -121,6 +123,14 @@ function AppStack() {
           presentation: 'modal',
           headerShown: false,
           title: 'Identity Verification',
+          animation: 'slide_from_bottom',
+        }}
+      />
+      <Stack.Screen
+        name="push-verification"
+        options={{
+          presentation: 'modal',
+          headerShown: false,
           animation: 'slide_from_bottom',
         }}
       />

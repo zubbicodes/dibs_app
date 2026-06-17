@@ -37,6 +37,7 @@ import { PhoneDetectorOverlay } from '@/components/phone-detector-overlay';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { WatermarkOverlay } from '@/components/watermark-overlay';
+import { WebSecureUnlock } from '@/components/web-secure-unlock';
 import { PHONE_DETECTION_FPS } from '@/constants/detection';
 import { Colors, FontFamilies } from '@/constants/theme';
 import { useDemoSession } from '@/hooks/demo-session';
@@ -67,7 +68,7 @@ export default function VaultScreen() {
   const theme = Colors[colorScheme];
   const { width, isMobile, isTablet } = useViewportDimensions();
   const insets = useSafeAreaInsets();
-  const { isVaultVerified } = useDemoSession();
+  const { isVaultVerified, verifyVault } = useDemoSession();
   const [filter, setFilter] = useState<Filter>('all');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [actionItem, setActionItem] = useState<VaultItem | null>(null);
@@ -432,6 +433,19 @@ export default function VaultScreen() {
   }, [actionItem, router]);
 
   if (!isVaultVerified) {
+    if (Platform.OS === 'web' && user?.id) {
+      return (
+        <ThemedView style={styles.screen}>
+          <View style={styles.lockedOverlay} />
+          <SafeAreaView edges={['top']} style={styles.safeArea}>
+            <View style={styles.lockedWrap}>
+              <WebSecureUnlock userId={user.id} onApproved={verifyVault} />
+            </View>
+          </SafeAreaView>
+        </ThemedView>
+      );
+    }
+
     return (
       <ThemedView style={styles.screen}>
         <View style={styles.lockedOverlay} />
