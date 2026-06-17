@@ -34,9 +34,9 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY server.js ./server.js
 
-EXPOSE 3000
+EXPOSE 80
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --quiet --tries=1 --spider http://localhost:${PORT:-3000}/health || exit 1
+  CMD wget --quiet --tries=1 --spider http://127.0.0.1:${PORT:-80}/health || exit 1
 
 CMD ["node", "server.js"]
