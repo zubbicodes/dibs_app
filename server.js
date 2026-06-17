@@ -3,7 +3,7 @@ const http = require('node:http');
 const path = require('node:path');
 const { createRequestHandler } = require('expo-server/adapter/http');
 
-const port = Number(process.env.PORT || 3000);
+const port = Number(process.env.PORT || 80);
 const rootDir = __dirname;
 const clientDir = path.join(rootDir, 'dist', 'client');
 const serverDir = path.join(rootDir, 'dist', 'server');
@@ -102,6 +102,6 @@ const server = http.createServer(async (req, res) => {
   });
 });
 
-server.listen(port, '0.0.0.0', () => {
+server.listen(port, () => {
   console.log(`DIBS web server listening on port ${port}`);
 });
