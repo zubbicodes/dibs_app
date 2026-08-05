@@ -363,11 +363,23 @@ const SettingsScreen = () => {
               {/* --- Privacy & Compliance --- */}
               <ThemedText style={[styles.sectionTitle, { color: sectionTitleColor }]}>Privacy & Compliance</ThemedText>
               <View style={[styles.block, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-                <Pressable style={({ pressed }) => [styles.row, { opacity: pressed ? 0.9 : 1 }]}>
+                <Pressable
+                  onPress={() => router.push('/privacy-policy')}
+                  style={({ pressed }) => [styles.row, { opacity: pressed ? 0.9 : 1 }]}>
                   <LinearGradient colors={theme.blueGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.iconCircle}>
                     <MaterialIcons name="shield" size={14} color="#FFF" />
                   </LinearGradient>
-                  <ThemedText style={[styles.rowLabel, { color: theme.text, fontSize: isMobile ? 12 : 15 }]}>Data Retention Policy</ThemedText>
+                  <ThemedText style={[styles.rowLabel, { color: theme.text, fontSize: isMobile ? 12 : 15 }]}>Privacy Policy</ThemedText>
+                  <MaterialIcons name="chevron-right" size={20} color={theme.mutedText} style={{ opacity: 0.6 }} />
+                </Pressable>
+                <View style={[styles.divider, { backgroundColor: dividerColor }]} />
+                <Pressable
+                  onPress={() => router.push('/terms-and-conditions')}
+                  style={({ pressed }) => [styles.row, { opacity: pressed ? 0.9 : 1 }]}>
+                  <LinearGradient colors={['#8B5CF6', '#7C3AED']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.iconCircle}>
+                    <MaterialIcons name="gavel" size={14} color="#FFF" />
+                  </LinearGradient>
+                  <ThemedText style={[styles.rowLabel, { color: theme.text, fontSize: isMobile ? 12 : 15 }]}>Terms &amp; Conditions</ThemedText>
                   <MaterialIcons name="chevron-right" size={20} color={theme.mutedText} style={{ opacity: 0.6 }} />
                 </Pressable>
                 <View style={[styles.divider, { backgroundColor: dividerColor }]} />

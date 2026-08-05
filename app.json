@@ -13,7 +13,7 @@
       "infoPlist": {
         "NSCameraUsageDescription": "Allow DIBS to access the camera to enroll and verify your face."
       },
-      "bundleIdentifier": "com.zubbihawk.dibs-expo"
+      "bundleIdentifier": "com.designally.dibs"
     },
     "android": {
       "adaptiveIcon": {
@@ -24,7 +24,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.zubbihawk.dibs_expo",
+      "package": "com.designally.dibs",
       "permissions": [
         "android.permission.USE_BIOMETRIC",
         "android.permission.USE_FINGERPRINT",
