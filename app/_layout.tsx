@@ -142,6 +142,22 @@ function AppStack() {
           animation: 'fade',
         }}
       />
+      <Stack.Screen
+        name="privacy-policy"
+        options={{
+          headerShown: false,
+          title: 'Privacy Policy',
+          animation: 'slide_from_right',
+        }}
+      />
+      <Stack.Screen
+        name="terms-and-conditions"
+        options={{
+          headerShown: false,
+          title: 'Terms & Conditions',
+          animation: 'slide_from_right',
+        }}
+      />
     </Stack>
   );
 }
