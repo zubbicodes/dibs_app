@@ -1,47 +1,123 @@
 name: Build Android APK
 
+# Builds a release APK directly on the GitHub runner (expo prebuild + Gradle).
+# No Expo/EAS account or build credits are needed.
+#
+# Repository secrets used:
+#   EXPO_PUBLIC_SUPABASE_URL   - required, inlined into the JS bundle
+#   EXPO_PUBLIC_SUPABASE_KEY   - required, inlined into the JS bundle
+#   ANDROID_KEYSTORE_BASE64    - optional, base64 of the release .keystore/.jks
+#   ANDROID_KEYSTORE_PASSWORD  - optional, keystore password
+#   ANDROID_KEY_ALIAS          - optional, key alias inside the keystore
+#   ANDROID_KEY_PASSWORD       - optional, key password (defaults to keystore password)
+# Without the keystore secrets the APK is signed with the debug key (installable for testing).
+
 on:
   workflow_dispatch:
   push:
     branches:
       - main
+    tags:
+      - "v*"
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write # needed only to attach the APK to a GitHub Release on v* tags
 
 jobs:
   build-android-apk:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_KEY }}
+      NODE_ENV: production
+      GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx6g -XX:MaxMetaspaceSize=1g" -Dorg.gradle.daemon=false
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Check required secrets
+        run: |
+          if [ -z "$EXPO_PUBLIC_SUPABASE_URL" ] || [ -z "$EXPO_PUBLIC_SUPABASE_KEY" ]; then
+            echo "::error::Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_KEY in repo Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Gradle cache
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Install EAS CLI
-        run: npm install -g eas-cli
+      - name: Generate native Android project
+        run: npx expo prebuild --platform android --no-install --clean
 
-      - name: Build APK with EAS
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: |
-          build_json=$(eas build --platform android --profile preview --non-interactive --json)
-          echo "$build_json" > build.json
-          build_id=$(node -e "const fs=require('fs');const d=JSON.parse(fs.readFileSync('build.json','utf8'));console.log(d[0].id);")
-          echo "BUILD_ID=$build_id" >> $GITHUB_ENV
+      - name: Copy ML model into Android assets
+        # postinstall ran before android/ existed, so copy the tflite model again
+        run: node scripts/copy-assets.js
 
-      - name: Download APK
+      - name: Build release APK
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: Sign APK with release key
         env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          eas build:download --platform android --id $BUILD_ID --non-interactive --path ./artifacts/app.apk
+          mkdir -p dist
+          APK_IN=android/app/build/outputs/apk/release/app-release.apk
+          APK_OUT=dist/dibs-${GITHUB_REF_NAME//\//-}-${GITHUB_SHA::7}.apk
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+            BUILD_TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+            export KEY_PASSWORD="${KEY_PASSWORD:-$KEYSTORE_PASSWORD}"
+            "$BUILD_TOOLS/apksigner" sign \
+              --ks "$RUNNER_TEMP/release.keystore" \
+              --ks-pass env:KEYSTORE_PASSWORD \
+              --ks-key-alias "$KEY_ALIAS" \
+              --key-pass env:KEY_PASSWORD \
+              --out "$APK_OUT" "$APK_IN"
+            "$BUILD_TOOLS/apksigner" verify --print-certs "$APK_OUT"
+            rm -f "$RUNNER_TEMP/release.keystore"
+          else
+            echo "::warning::No ANDROID_KEYSTORE_BASE64 secret - APK is signed with the debug key."
+            cp "$APK_IN" "$APK_OUT"
+          fi
+          echo "APK_PATH=$APK_OUT" >> "$GITHUB_ENV"
+          ls -lh dist
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: android-apk
-          path: ./artifacts/app.apk
+          name: dibs-android-apk
+          path: ${{ env.APK_PATH }}
+          retention-days: 30
+
+      - name: Attach APK to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.APK_PATH }}
